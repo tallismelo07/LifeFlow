@@ -1,180 +1,94 @@
-// src/context/AuthContext.jsx
+// src/context/AppContext.jsx
 
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import {
-  loginRequest,
-  logoutRequest,
-  meRequest,
-  heartbeatRequest,
-  activityUsersRequest,
-} from '../services/authService';
+import { createContext, useContext, useState, useEffect } from 'react';
+import { getDataRequest, saveDataRequest } from '../services/authService';
+import { useAuth } from './AuthContext';
 
-const AuthContext = createContext(null);
+const AppContext = createContext(null);
 
-const TOKEN_KEY = 'lf_token';
-const USER_KEY  = 'lf_user';
+export function AppProvider({ children }) {
+  const { currentUser } = useAuth();
 
-// ── helpers ────────────────────────────────────────────────
+  const [userData, setUserData] = useState({
+    tasks: [],
+    habits: [],
+    agenda: [],
+    notes: [],
+    goals: [],
+    studyItems: []
+  });
 
-const saveSession = (token, user) => {
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
-};
+  const [loadingData, setLoadingData] = useState(true);
 
-const clearSession = () => {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-};
-
-const loadToken = () => localStorage.getItem(TOKEN_KEY);
-
-const loadUser = () => {
-  try {
-    return JSON.parse(localStorage.getItem(USER_KEY));
-  } catch {
-    return null;
-  }
-};
-
-// ── provider ───────────────────────────────────────────────
-
-export function AuthProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState(() => loadUser());
-  const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState(null);
-  const [activityUsers, setActivityUsers] = useState([]);
-
-  // 🔐 valida token ao iniciar app
-  useEffect(() => {
-    const initAuth = async () => {
-      const token = loadToken();
-
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const user = await meRequest();
-
-        setCurrentUser(user);
-        saveSession(token, user);
-      } catch (error) {
-        console.warn('Sessão inválida ou expirada');
-        clearSession();
-        setCurrentUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initAuth();
-  }, []);
-
-  // 🚨 escuta expiração de token (axios interceptor)
-  useEffect(() => {
-    const handleExpired = () => {
-      clearSession();
-      setCurrentUser(null);
-    };
-
-    window.addEventListener('auth:expired', handleExpired);
-    return () => window.removeEventListener('auth:expired', handleExpired);
-  }, []);
-
-  // 💓 heartbeat (mantém online)
+  // 🔥 CARREGA DADOS DO BACKEND (ESSENCIAL)
   useEffect(() => {
     if (!currentUser) return;
 
-    heartbeatRequest();
+    const loadData = async () => {
+      try {
+        setLoadingData(true);
 
-    const interval = setInterval(() => {
-      heartbeatRequest();
-    }, 60000);
+        const data = await getDataRequest();
 
-    return () => clearInterval(interval);
+        setUserData(data);
+      } catch (err) {
+        console.error('Erro ao carregar dados do servidor', err);
+      } finally {
+        setLoadingData(false);
+      }
+    };
+
+    loadData();
   }, [currentUser]);
 
-  // 🔐 LOGIN
-  const login = useCallback(async (username, password) => {
-    setAuthError(null);
+  // 💾 SALVA AUTOMATICAMENTE NO BACKEND
+  useEffect(() => {
+    if (!currentUser) return;
 
-    try {
-      const { token, user } = await loginRequest(username, password);
+    const timeout = setTimeout(async () => {
+      try {
+        await saveDataRequest(userData);
+      } catch (err) {
+        console.error('Erro ao salvar dados', err);
+      }
+    }, 800); // debounce (evita spam)
 
-      saveSession(token, user);
-      setCurrentUser(user);
+    return () => clearTimeout(timeout);
+  }, [userData, currentUser]);
 
-      return { ok: true };
-    } catch (err) {
-      const message =
-        err.response?.data?.error ||
-        'Erro ao conectar com o servidor.';
-
-      setAuthError(message);
-
-      return { ok: false, message };
+  // 🧹 limpa ao deslogar
+  useEffect(() => {
+    if (!currentUser) {
+      setUserData({
+        tasks: [],
+        habits: [],
+        agenda: [],
+        notes: [],
+        goals: [],
+        studyItems: []
+      });
     }
-  }, []);
-
-  // 🚪 LOGOUT
-  const logout = useCallback(async () => {
-    try {
-      await logoutRequest();
-    } catch {
-      // ignora erro de rede
-    }
-
-    clearSession();
-    setCurrentUser(null);
-  }, []);
-
-  // 👥 ADMIN - atividade
-  const fetchActivityUsers = useCallback(async () => {
-    try {
-      const users = await activityUsersRequest();
-      setActivityUsers(users);
-    } catch {
-      // não quebra se não for admin
-    }
-  }, []);
-
-  // ── derivados ────────────────────────────────────────────
-
-  const isAdmin = currentUser?.role === 'admin';
-  const currentUserId = currentUser?.id?.toString() || null;
-  const isAuthenticated = !!currentUser;
+  }, [currentUser]);
 
   return (
-    <AuthContext.Provider
+    <AppContext.Provider
       value={{
-        currentUser,
-        currentUserId,
-        isAdmin,
-        isAuthenticated,
-
-        loading,
-        authError,
-
-        login,
-        logout,
-
-        activityUsers,
-        fetchActivityUsers,
+        userData,
+        setUserData,
+        loadingData
       }}
     >
       {children}
-    </AuthContext.Provider>
+    </AppContext.Provider>
   );
 }
 
-// ── hook ───────────────────────────────────────────────────
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
+// hook
+export function useApp() {
+  const ctx = useContext(AppContext);
 
   if (!ctx) {
-    throw new Error('useAuth must be used within AuthProvider');
+    throw new Error('useApp must be used within AppProvider');
   }
 
   return ctx;
