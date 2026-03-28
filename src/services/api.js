@@ -2,27 +2,21 @@
 
 import axios from 'axios';
 
-// 🔥 Detecta ambiente automaticamente
-const isDev = import.meta.env.DEV;
+// 🔥 pega variável de ambiente
+const API_URL = import.meta.env.VITE_API_URL;
 
-// 👉 LOCAL usa proxy do Vite
-// 👉 PRODUÇÃO usa URL do Render
-const baseURL = isDev
-  ? '/api'
-  : import.meta.env.VITE_API_URL;
-
-// ⚠️ fallback de segurança (caso esqueça .env)
-const finalBaseURL = baseURL || 'https://lifeflow-73j3.onrender.com/api';
+// 👉 fallback garantido
+const baseURL = API_URL || 'https://lifeflow-73j3.onrender.com/api';
 
 const api = axios.create({
-  baseURL: finalBaseURL,
+  baseURL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// 🔐 Injeta token automaticamente
+// 🔐 token automático
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('lf_token');
 
@@ -33,7 +27,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// 🚨 Intercepta erros globais (token expirado)
+// 🚨 tratamento global de erro
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -43,7 +37,6 @@ api.interceptors.response.use(
       localStorage.removeItem('lf_token');
       localStorage.removeItem('lf_user');
 
-      // dispara evento global para logout
       window.dispatchEvent(new Event('auth:expired'));
     }
 
