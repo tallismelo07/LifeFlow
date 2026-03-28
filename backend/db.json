@@ -1,0 +1,66 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "tallis",
+      "password": "$2b$10$rn5m/UZ90i6IjUbffhYKgufMOKHNtsiyiDh.UwOoQ9jAyqEen8Qza",
+      "role": "admin",
+      "name": "Tallis",
+      "avatar": "T",
+      "color": "#5B8DEF",
+      "last_login": "2026-03-28T18:50:32.706Z",
+      "is_online": false
+    },
+    {
+      "id": 2,
+      "username": "yasmin",
+      "password": "$2b$10$5PDh1TtMyzpPWdUwtBmpuukuP39h73YZkvDKF56cfdTgl5KBtupAK",
+      "role": "user",
+      "name": "Yasmin",
+      "avatar": "Y",
+      "color": "#F0556A",
+      "last_login": "2026-03-28T18:51:48.573Z",
+      "is_online": false
+    },
+    {
+      "id": 3,
+      "username": "pedro",
+      "password": "$2b$10$icwmQBKbQKSCKAnY7lX/5.4C0TqBrULahNP6.gvV7QRUxr7Rcoguu",
+      "role": "user",
+      "name": "Pedro",
+      "avatar": "P",
+      "color": "#2DD4BF",
+      "last_login": "2026-03-28T18:53:36.575Z",
+      "is_online": false
+    }
+  ],
+  "data": {
+    "tallis": {
+      "tasks": [],
+      "habits": [],
+      "transactions": [],
+      "studyItems": [],
+      "notes": [],
+      "goals": [],
+      "agenda": []
+    },
+    "yasmin": {
+      "tasks": [],
+      "habits": [],
+      "transactions": [],
+      "studyItems": [],
+      "notes": [],
+      "goals": [],
+      "agenda": []
+    },
+    "pedro": {
+      "tasks": [],
+      "habits": [],
+      "transactions": [],
+      "studyItems": [],
+      "notes": [],
+      "goals": [],
+      "agenda": []
+    }
+  }
+}
