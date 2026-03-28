@@ -1,44 +1,84 @@
 // src/services/authService.js
-// Chamadas para os endpoints de auth do backend
 
 import api from './api';
 
-// POST /api/login -> { token, user }
+// 🔐 LOGIN
 export async function loginRequest(username, password) {
-  const { data } = await api.post('/login', { username, password });
-  return data;
+  try {
+    const { data } = await api.post('/login', {
+      username,
+      password,
+    });
+
+    // retorna { token, user }
+    return data;
+  } catch (error) {
+    console.error('❌ Erro no login:', error.response?.data || error.message);
+    throw error;
+  }
 }
 
-// POST /api/logout
+// 🚪 LOGOUT
 export async function logoutRequest() {
-  try { await api.post('/logout'); } catch { /* não bloqueia */ }
+  try {
+    await api.post('/logout');
+  } catch (error) {
+    console.warn('⚠️ Erro no logout (ignorado)');
+  }
 }
 
-// GET /api/me -> { user }
+// 👤 USUÁRIO ATUAL
 export async function meRequest() {
-  const { data } = await api.get('/me');
-  return data.user;
+  try {
+    const { data } = await api.get('/me');
+    return data.user;
+  } catch (error) {
+    console.error('❌ Erro ao buscar usuário:', error.response?.data || error.message);
+    throw error;
+  }
 }
 
-// PATCH /api/heartbeat — mantém online
+// 💓 HEARTBEAT (mantém online)
 export async function heartbeatRequest() {
-  try { await api.patch('/heartbeat'); } catch { /* silencioso */ }
+  try {
+    await api.patch('/heartbeat');
+  } catch {
+    // silencioso por design
+  }
 }
 
-// GET /api/users (admin) -> { users: [...] }
+// 👥 ADMIN - usuários ativos
 export async function activityUsersRequest() {
-  const { data } = await api.get('/users');
-  return data.users;
+  try {
+    const { data } = await api.get('/users');
+    return data.users;
+  } catch (error) {
+    console.error('❌ Erro ao buscar usuários:', error.response?.data || error.message);
+    throw error;
+  }
 }
 
-// GET /api/data -> { data: {...} }
+// 📊 BUSCAR DADOS DO USUÁRIO
 export async function getDataRequest() {
-  const { data } = await api.get('/data');
-  return data.data;
+  try {
+    const { data } = await api.get('/data');
+    return data.data;
+  } catch (error) {
+    console.error('❌ Erro ao buscar dados:', error.response?.data || error.message);
+    throw error;
+  }
 }
 
-// POST /api/data { data: {...} } -> { ok: true }
+// 💾 SALVAR DADOS DO USUÁRIO
 export async function saveDataRequest(userData) {
-  const { data } = await api.post('/data', { data: userData });
-  return data;
+  try {
+    const { data } = await api.post('/data', {
+      data: userData,
+    });
+
+    return data;
+  } catch (error) {
+    console.error('❌ Erro ao salvar dados:', error.response?.data || error.message);
+    throw error;
+  }
 }

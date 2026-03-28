@@ -1,5 +1,4 @@
 // src/context/AuthContext.jsx
-// Autenticação via JWT + backend Node.js
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
@@ -15,99 +14,168 @@ const AuthContext = createContext(null);
 const TOKEN_KEY = 'lf_token';
 const USER_KEY  = 'lf_user';
 
-// Funções de sessão local
-const saveSession  = (token, user) => {
+// ── helpers ────────────────────────────────────────────────
+
+const saveSession = (token, user) => {
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 };
+
 const clearSession = () => {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
 };
+
 const loadToken = () => localStorage.getItem(TOKEN_KEY);
-const loadUser  = () => {
-  try { return JSON.parse(localStorage.getItem(USER_KEY)); } catch { return null; }
+
+const loadUser = () => {
+  try {
+    return JSON.parse(localStorage.getItem(USER_KEY));
+  } catch {
+    return null;
+  }
 };
 
+// ── provider ───────────────────────────────────────────────
+
 export function AuthProvider({ children }) {
-  const [currentUser,   setCurrentUser]   = useState(() => loadUser());
-  const [loading,       setLoading]       = useState(() => !!loadToken());
-  const [authError,     setAuthError]     = useState(null);
+  const [currentUser, setCurrentUser] = useState(() => loadUser());
+  const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
   const [activityUsers, setActivityUsers] = useState([]);
 
-  // Valida token salvo ao abrir o app (mantém logado após reload)
+  // 🔐 valida token ao iniciar app
   useEffect(() => {
-    const token = loadToken();
-    if (!token) { setLoading(false); return; }
+    const initAuth = async () => {
+      const token = loadToken();
 
-    meRequest()
-      .then((user) => { setCurrentUser(user); saveSession(token, user); })
-      .catch(() => { clearSession(); setCurrentUser(null); })
-      .finally(() => setLoading(false));
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const user = await meRequest();
+
+        setCurrentUser(user);
+        saveSession(token, user);
+      } catch (error) {
+        console.warn('Sessão inválida ou expirada');
+        clearSession();
+        setCurrentUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initAuth();
   }, []);
 
-  // Ouve evento de token expirado (disparado pelo interceptor do Axios)
+  // 🚨 escuta expiração de token (axios interceptor)
   useEffect(() => {
-    const handle = () => { clearSession(); setCurrentUser(null); };
-    window.addEventListener('auth:expired', handle);
-    return () => window.removeEventListener('auth:expired', handle);
+    const handleExpired = () => {
+      clearSession();
+      setCurrentUser(null);
+    };
+
+    window.addEventListener('auth:expired', handleExpired);
+    return () => window.removeEventListener('auth:expired', handleExpired);
   }, []);
 
-  // Heartbeat a cada 60s mantém o usuário marcado como online
+  // 💓 heartbeat (mantém online)
   useEffect(() => {
     if (!currentUser) return;
+
     heartbeatRequest();
-    const id = setInterval(heartbeatRequest, 60_000);
-    return () => clearInterval(id);
+
+    const interval = setInterval(() => {
+      heartbeatRequest();
+    }, 60000);
+
+    return () => clearInterval(interval);
   }, [currentUser]);
 
-  // ── login ──────────────────────────────────────────────────────────────────
+  // 🔐 LOGIN
   const login = useCallback(async (username, password) => {
     setAuthError(null);
+
     try {
       const { token, user } = await loginRequest(username, password);
+
       saveSession(token, user);
       setCurrentUser(user);
+
       return { ok: true };
     } catch (err) {
-      const message = err.response?.data?.error || 'Erro ao conectar com o servidor.';
+      const message =
+        err.response?.data?.error ||
+        'Erro ao conectar com o servidor.';
+
       setAuthError(message);
+
       return { ok: false, message };
     }
   }, []);
 
-  // ── logout ─────────────────────────────────────────────────────────────────
+  // 🚪 LOGOUT
   const logout = useCallback(async () => {
-    await logoutRequest(); // marca offline no banco
+    try {
+      await logoutRequest();
+    } catch {
+      // ignora erro de rede
+    }
+
     clearSession();
     setCurrentUser(null);
   }, []);
 
-  // ── busca usuários para o painel admin ────────────────────────────────────
+  // 👥 ADMIN - atividade
   const fetchActivityUsers = useCallback(async () => {
     try {
       const users = await activityUsersRequest();
       setActivityUsers(users);
-    } catch { /* silencioso se não for admin */ }
+    } catch {
+      // não quebra se não for admin
+    }
   }, []);
 
-  const isAdmin       = currentUser?.role === 'admin';
+  // ── derivados ────────────────────────────────────────────
+
+  const isAdmin = currentUser?.role === 'admin';
   const currentUserId = currentUser?.id?.toString() || null;
+  const isAuthenticated = !!currentUser;
 
   return (
-    <AuthContext.Provider value={{
-      currentUser, currentUserId, isAdmin,
-      loading, authError,
-      login, logout,
-      activityUsers, fetchActivityUsers,
-    }}>
+    <AuthContext.Provider
+      value={{
+        currentUser,
+        currentUserId,
+        isAdmin,
+        isAuthenticated,
+
+        loading,
+        authError,
+
+        login,
+        logout,
+
+        activityUsers,
+        fetchActivityUsers,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
+// ── hook ───────────────────────────────────────────────────
+
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be inside AuthProvider');
+
+  if (!ctx) {
+    throw new Error('useAuth must be used within AuthProvider');
+  }
+
   return ctx;
 }
