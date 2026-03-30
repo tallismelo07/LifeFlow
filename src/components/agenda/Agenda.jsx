@@ -144,12 +144,15 @@ export default function Agenda() {
 
         <div className="flex items-center gap-2">
           {/* View toggle */}
-          <div className="flex bg-ink-muted p-1 rounded-xl gap-1">
+          <div
+            className="flex p-1 rounded-xl gap-1"
+            style={{ background: 'var(--bg-muted)', border: '1px solid var(--border)' }}
+          >
             {['day', 'week'].map((v) => (
               <button key={v} onClick={() => setView(v)}
                 className="text-xs font-medium px-3 py-1.5 rounded-lg transition-all"
                 style={view === v
-                  ? { background: 'var(--blue)', color: '#fff', fontWeight: 600 }
+                  ? { background: 'var(--blue)', color: 'var(--on-blue)', fontWeight: 600 }
                   : { color: 'var(--text-3)' }
                 }>
                 {v === 'day' ? 'Dia' : 'Semana'}

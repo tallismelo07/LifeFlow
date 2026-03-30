@@ -83,7 +83,7 @@ export default function Sidebar() {
             whileHover={{ rotate: 15, scale: 1.1 }}
             transition={{ type: 'spring', stiffness: 300 }}
           >
-            <Zap size={16} color="#fff" fill="#fff" />
+            <Zap size={16} style={{ color: 'var(--on-blue)' }} fill="var(--on-blue)" />
           </motion.div>
           <span className="font-bold text-lg tracking-tight" style={{ color: 'var(--text)' }}>LifeFlow</span>
         </div>
@@ -111,8 +111,8 @@ export default function Sidebar() {
         >
           <div className="flex items-center gap-2.5">
             <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
-              style={{ background: 'var(--blue)' }}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+              style={{ background: 'var(--blue)', color: 'var(--on-blue)' }}
             >
               {currentUser.avatar}
             </div>

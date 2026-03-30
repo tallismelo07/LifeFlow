@@ -2,11 +2,8 @@
 
 import axios from 'axios';
 
-// 🔥 pega variável de ambiente
-const API_URL = import.meta.env.VITE_API_URL;
-
-// 👉 fallback garantido
-const baseURL = API_URL || 'https://lifeflow-73j3.onrender.com/api';
+// Usa variável de ambiente (produção) ou proxy local do Vite (dev)
+const baseURL = import.meta.env.VITE_API_URL || '/api';
 
 const api = axios.create({
   baseURL,

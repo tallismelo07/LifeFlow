@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useApp }  from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { StatCard } from '../ui';
+import CatMascot   from '../ui/CatMascot';
 import {
   CheckSquare, Flame, TrendingUp, TrendingDown, DollarSign,
   Target, ArrowRight, Circle, CheckCircle2, Timer, Calendar, Clock,
@@ -85,6 +86,8 @@ export default function Dashboard() {
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+
+  const isYasmin = currentUser?.username === 'yasmin';
 
   return (
     <motion.div
@@ -390,6 +393,9 @@ export default function Dashboard() {
         </motion.button>
 
       </div>
+
+      {/* Gatinho da Yasmin 🐱 */}
+      {isYasmin && <CatMascot />}
     </motion.div>
   );
 }

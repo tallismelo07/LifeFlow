@@ -69,6 +69,12 @@ export async function getDataRequest() {
   }
 }
 
+// 🔑 ALTERAR SENHA
+export async function changePasswordRequest(currentPassword, newPassword) {
+  const { data } = await api.post('/change-password', { currentPassword, newPassword });
+  return data;
+}
+
 // 💾 SALVAR DADOS DO USUÁRIO
 export async function saveDataRequest(userData) {
   try {
