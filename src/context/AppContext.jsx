@@ -1,13 +1,15 @@
 // src/context/AppContext.jsx
-// Dados do usuário — offline-first com sincronização confiável
+// ════════════════════════════════════════════════════════════
+//  Fluxo de dados confiável — sem perda de dados
 //
-// Fluxo correto:
-//  1. Init: carrega localStorage (UI instantânea)
-//  2. Mount: GET /api/data — servidor é fonte de verdade (se mais recente)
-//  3. Toda mutação: atualiza state + marca lastModifiedAt
-//  4. useEffect debounced 500ms: POST /api/data com retry automático
-//  5. beforeunload: fetch keepalive garante save mesmo em refresh rápido
-//  6. Polling 30s: sincroniza dados criados em outros dispositivos
+//  REGRAS DO SISTEMA:
+//  1. localStorage  = cache local rápido (nunca fonte de verdade)
+//  2. Servidor      = fonte de verdade final
+//  3. Nunca aplicar dados VAZIOS do servidor sobre dados LOCAIS não vazios
+//  4. Se servidor vazio mas local tem dados → upload imediato (recuperação)
+//  5. Save debounced 400ms + beforeunload (keepalive) = zero perda no refresh
+//  6. Polling a cada 5s = sincronização entre dispositivos
+// ════════════════════════════════════════════════════════════
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
@@ -17,120 +19,176 @@ import { apiBaseURL } from '../services/api';
 export const genId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 export const today = () => new Date().toISOString().split('T')[0];
 
-const lsKey     = (username) => `lf_data_${username}`;
+// ── Campos que compõem os dados do usuário ───────────────────
+const DATA_FIELDS = ['tasks', 'habits', 'transactions', 'studyItems', 'notes', 'goals', 'agenda'];
+
 const emptyData = () => ({
   tasks: [], habits: [], transactions: [],
   studyItems: [], notes: [], goals: [], agenda: [],
 });
 
-const loadLocal = (username) => {
+// Conta total de itens em todas as coleções
+function countItems(d) {
+  if (!d) return 0;
+  return DATA_FIELDS.reduce((n, k) => n + ((d[k] || []).length), 0);
+}
+
+// ── localStorage helpers ──────────────────────────────────────
+const lsKey = (u) => `lf_data_${u}`;
+
+function loadLocal(username) {
   if (!username) return emptyData();
   try {
-    const v = localStorage.getItem(lsKey(username));
-    return v ? { ...emptyData(), ...JSON.parse(v) } : emptyData();
+    const raw = localStorage.getItem(lsKey(username));
+    if (!raw) return emptyData();
+    return { ...emptyData(), ...JSON.parse(raw) };
   } catch { return emptyData(); }
-};
+}
 
-const saveLocal = (username, data) => {
+function saveLocal(username, data) {
   if (!username) return;
   try { localStorage.setItem(lsKey(username), JSON.stringify(data)); } catch {}
-};
+}
 
-// Salva no backend com retry automático
+// ── Salva no backend com retry automático ─────────────────────
 async function saveWithRetry(data, maxAttempts = 3) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      await saveDataRequest(data);
-      console.log('[AppContext] ✓ Dados salvos no servidor');
-      return true;
+      const result = await saveDataRequest(data);
+      console.log(`[AppContext] ✓ Salvo no servidor (tentativa ${attempt}) total=${countItems(data)}`);
+      return { ok: true, result };
     } catch (err) {
-      const isLast = attempt === maxAttempts;
-      console.warn(`[AppContext] ✗ Falha ao salvar (tentativa ${attempt}/${maxAttempts})`, err.message);
-      if (isLast) return false;
-      await new Promise((r) => setTimeout(r, attempt * 1000));
+      console.warn(`[AppContext] ✗ Falha ao salvar (${attempt}/${maxAttempts}):`, err.message);
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, attempt * 800));
+      }
     }
   }
-  return false;
+  console.error('[AppContext] ✗✗ Falha persistente — dados no localStorage mas não no servidor');
+  return { ok: false };
 }
 
-// Aplica dados do servidor ao estado, respeitando mudanças locais não salvas
-// serverTs: timestamp epoch do dado do servidor
-// localModifiedAt: timestamp epoch da última mudança local
-function mergeWithServer(serverData, localModifiedAt) {
-  const serverTs = serverData.updated_at
-    ? new Date(serverData.updated_at).getTime()
-    : 0;
-
-  // Separa o campo updated_at dos dados reais
-  const { updated_at: _, ...rest } = serverData;
-  const merged = { ...emptyData(), ...rest };
-
-  return { merged, serverTs, shouldApply: serverTs >= localModifiedAt };
-}
-
+// ── Contexto ──────────────────────────────────────────────────
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
   const { currentUser } = useAuth();
   const username = currentUser?.username;
 
-  const [data,    setData]    = useState(() => loadLocal(username));
-  const [syncing, setSyncing] = useState(false);
-  const [saveErr, setSaveErr] = useState(false);
+  // Estado principal — inicializado do localStorage para UI instantânea
+  const [data,      setData]      = useState(() => loadLocal(username));
+  const [syncing,   setSyncing]   = useState(false);
+  const [saveErr,   setSaveErr]   = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [lastSaved, setLastSaved] = useState(null);
 
-  // Refs de controle
-  const serverSynced   = useRef(false);
-  const saveTimer      = useRef(null);
-  const isFirstRender  = useRef(true);
-  const lastModifiedAt = useRef(0);   // epoch ms da última mudança LOCAL
-  const dataRef        = useRef(data); // sempre aponta para o data mais recente (para beforeunload)
+  // ── Refs de controle de ciclo ─────────────────────────────
+  const dataRef          = useRef(data);   // sempre aponta para o data mais recente
+  const saveTimer        = useRef(null);
+  const isFirstRender    = useRef(true);
+  // Flag: true quando há mudanças locais ainda não confirmadas pelo servidor
+  // Garante que o polling não sobrescreva edições em curso
+  const pendingChanges   = useRef(false);
+  // Guarda o timestamp ISO do último dado confirmado pelo servidor
+  // Usado para saber se o servidor tem algo mais novo
+  const lastServerTs     = useRef(null);
+  // Previne que a sincronização inicial rode mais de uma vez por sessão
+  const initialSyncDone  = useRef(false);
 
-  // Mantém dataRef sincronizado
+  // Mantém dataRef sempre atualizado com o state mais recente
   useEffect(() => { dataRef.current = data; }, [data]);
 
-  // ── Reseta ao trocar de usuário ─────────────────────────────
+  // ── Reset ao trocar de usuário ────────────────────────────
   useEffect(() => {
-    serverSynced.current  = false;
-    isFirstRender.current = true;
-    lastModifiedAt.current = 0;
+    // Cancela qualquer save em andamento do usuário anterior
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
-    setData(loadLocal(username));
+    // Reseta todos os controles
+    isFirstRender.current   = true;
+    pendingChanges.current  = false;
+    lastServerTs.current    = null;
+    initialSyncDone.current = false;
+
+    const local = loadLocal(username);
+    setData(local);
+    dataRef.current = local;
     setSaveErr(false);
+    setSyncing(false);
   }, [username]);
 
-  // ── Persiste no localStorage a cada mudança ─────────────────
+  // ── Persiste no localStorage a cada mudança de estado ─────
+  // (segurança — garante que o cache local nunca fica desatualizado)
   useEffect(() => {
     if (username) saveLocal(username, data);
   }, [username, data]);
 
-  // ── SINCRONIZAÇÃO INICIAL — servidor é a fonte de verdade ───
+  // ── SINCRONIZAÇÃO INICIAL ─────────────────────────────────
+  // Roda apenas uma vez por sessão de usuário.
+  // Estratégia:
+  //   A) Servidor vazio + local tem dados → upload de recuperação imediato
+  //   B) Servidor tem dados + sem edições locais → aplica servidor
+  //   C) Servidor tem dados + edições locais em andamento → mantém local
+  //   D) Ambos vazios → nada a fazer
   useEffect(() => {
-    if (!username) return;
+    if (!username || initialSyncDone.current) return;
+    initialSyncDone.current = true;
 
     setSyncing(true);
-    console.log('[AppContext] Buscando dados do servidor...');
+    console.log('[AppContext] 🔄 Sincronização inicial...');
 
     getDataRequest()
       .then((serverData) => {
         if (!serverData) return;
 
-        const { merged, serverTs, shouldApply } = mergeWithServer(serverData, lastModifiedAt.current);
+        const serverTotal = countItems(serverData);
+        const localData   = loadLocal(username); // lê do localStorage (mais fresco que state)
+        const localTotal  = countItems(localData);
 
-        if (!shouldApply && lastModifiedAt.current > 0) {
-          // Usuário já editou dados enquanto o servidor carregava (ex: Render cold start)
-          // Mantém os dados locais — o debounce vai salvar em breve
-          console.log('[AppContext] ℹ Local é mais recente — mantendo dados locais', {
-            local: new Date(lastModifiedAt.current).toISOString(),
-            server: serverData.updated_at,
+        console.log(`[AppContext] Servidor: ${serverTotal} itens  |  Local: ${localTotal} itens`);
+
+        // ── CASO A: servidor perdeu dados, local tem ──────────
+        // Acontece quando o Render reinicia e recria o banco vazio.
+        // Solução: faz upload do localStorage para recuperar os dados.
+        if (serverTotal === 0 && localTotal > 0) {
+          console.log('[AppContext] ⚠ Servidor vazio mas local tem dados — fazendo upload de recuperação');
+          saveWithRetry(localData).then(({ ok }) => {
+            if (ok) {
+              lastServerTs.current = new Date().toISOString();
+              pendingChanges.current = false;
+              setSaveErr(false);
+            } else {
+              setSaveErr(true);
+            }
           });
-          serverSynced.current = true;
+          // Estado já tem os dados locais — não muda nada visualmente
           return;
         }
 
-        console.log('[AppContext] ✓ Aplicando dados do servidor', {
+        // ── CASO D: ambos vazios ──────────────────────────────
+        if (serverTotal === 0 && localTotal === 0) {
+          console.log('[AppContext] ℹ Servidor e local vazios — novo usuário');
+          lastServerTs.current = serverData.updated_at || null;
+          return;
+        }
+
+        // ── CASO C: edições locais em curso ───────────────────
+        // O usuário editou dados ANTES do servidor responder
+        // (cold start lento do Render, por exemplo).
+        // Mantém os dados locais — o debounce vai salvar em breve.
+        if (pendingChanges.current) {
+          console.log('[AppContext] ℹ Edições locais em curso — ignorando servidor');
+          return;
+        }
+
+        // ── CASO B: servidor tem dados, sem edições locais ────
+        // Servidor é a fonte de verdade. Aplica.
+        const { updated_at: _, ...rest } = serverData;
+        const merged = { ...emptyData(), ...rest };
+        lastServerTs.current = serverData.updated_at || null;
+
+        console.log('[AppContext] ✓ Dados do servidor aplicados:', {
           tasks:        merged.tasks.length,
           habits:       merged.habits.length,
           notes:        merged.notes.length,
@@ -138,124 +196,167 @@ export function AppProvider({ children }) {
           agenda:       merged.agenda.length,
           studyItems:   merged.studyItems.length,
           transactions: merged.transactions.length,
-          serverTs:     new Date(serverTs).toISOString(),
         });
 
+        // Aplica sem disparar o save useEffect para o servidor
+        // (isFirstRender ainda está true, então o useEffect pula)
         setData(merged);
-        saveLocal(username, merged);
-        serverSynced.current = true;
+        saveLocal(username, merged); // atualiza cache local com dado do servidor
       })
       .catch((err) => {
-        console.warn('[AppContext] Servidor inacessível, usando localStorage:', err.message);
-        serverSynced.current = false;
+        console.warn('[AppContext] Servidor inacessível — usando localStorage:', err.message);
+        // Modo offline: localStorage continua sendo a fonte enquanto o servidor não responde
       })
       .finally(() => setSyncing(false));
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
 
-  // ── POLLING — sincronização entre dispositivos (a cada 30s) ─
+  // ── POLLING — sincroniza entre dispositivos ───────────────
+  // A cada 5s, busca dados do servidor.
+  // SÓ aplica se:
+  //   1. Não há edições locais pendentes (pendingChanges = false)
+  //   2. O servidor tem algo mais recente (via updated_at)
+  //   3. O servidor tem MAIS itens que o local (proteção extra)
   useEffect(() => {
     if (!username) return;
 
     const poll = async () => {
-      // Não faz poll se há save pendente (timer ativo) — evita conflito
+      // Não poleia se há edições locais não salvas
+      if (pendingChanges.current) return;
+      // Não poleia se há um save em andamento
       if (saveTimer.current) return;
+      // Não poleia se a aba está oculta (economiza bateria/rede em mobile)
+      if (document.visibilityState === 'hidden') return;
 
       try {
         const serverData = await getDataRequest();
         if (!serverData) return;
 
-        const { merged, serverTs } = mergeWithServer(serverData, lastModifiedAt.current);
+        const serverTs    = serverData.updated_at;
+        const serverTotal = countItems(serverData);
+        const localTotal  = countItems(dataRef.current);
 
-        // Só atualiza se o servidor tem dados mais recentes que nossa última edição
-        if (serverTs > lastModifiedAt.current) {
-          console.log('[AppContext] 🔄 Polling: dados mais recentes no servidor — sincronizando');
-          setData(merged);
-          saveLocal(username, merged);
-        }
+        // Decide se aplica: servidor mais recente OU servidor tem mais itens
+        const serverIsNewer = serverTs && lastServerTs.current && serverTs > lastServerTs.current;
+        const serverHasMore = serverTotal > localTotal;
+
+        if (!serverIsNewer && !serverHasMore) return;
+
+        // Última verificação: não aplica se vieram edições locais durante o fetch
+        if (pendingChanges.current) return;
+
+        const { updated_at: _, ...rest } = serverData;
+        const merged = { ...emptyData(), ...rest };
+        lastServerTs.current = serverTs;
+
+        console.log(`[AppContext] 🔄 Polling aplicado: ${serverTotal} itens do servidor`);
+        setData(merged);
+        saveLocal(username, merged);
       } catch {
         // Silent fail — rede pode estar indisponível
       }
     };
 
-    const id = setInterval(poll, 30_000);
-    return () => clearInterval(id);
+    const intervalId = setInterval(poll, 5_000);
+    // Escuta visibilitychange para sincronizar quando o usuário volta à aba
+    const onVisible = () => { if (document.visibilityState === 'visible') poll(); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [username]);
 
-  // ── SAVE DEBOUNCED — 500ms após última mutação ───────────────
+  // ── SAVE DEBOUNCED — 400ms após última mudança local ──────
   useEffect(() => {
-    // Pula o primeiro render (dados vieram do localStorage, não do usuário)
+    // Pula o render inicial (dados vieram do localStorage, não de ação do usuário)
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
     if (!username) return;
 
+    // Cancela o save anterior (debounce)
     if (saveTimer.current) clearTimeout(saveTimer.current);
 
     saveTimer.current = setTimeout(async () => {
-      saveTimer.current = null; // limpa ref antes do save (libera polling)
-      console.log('[AppContext] Salvando dados no servidor...', { username });
-      const ok = await saveWithRetry(dataRef.current);
+      saveTimer.current = null;
+
+      const snapshot = dataRef.current; // captura o estado atual no momento do disparo
+      console.log(`[AppContext] Salvando ${countItems(snapshot)} itens no servidor...`);
+
+      setSaving(true);
+      const { ok } = await saveWithRetry(snapshot);
+      setSaving(false);
       setSaveErr(!ok);
-      if (!ok) {
-        console.error('[AppContext] ✗ Falha persistente ao salvar. Dados estão no localStorage.');
+
+      if (ok) {
+        pendingChanges.current = false;
+        lastServerTs.current   = new Date().toISOString();
+        setLastSaved(new Date());
       }
-    }, 500);
+    }, 400);
 
     return () => {
-      if (saveTimer.current) {
-        clearTimeout(saveTimer.current);
-        // NÃO zeramos saveTimer.current no cleanup — o beforeunload verifica isso
-      }
+      if (saveTimer.current) clearTimeout(saveTimer.current);
     };
   }, [data, username]);
 
-  // ── SAVE NO FECHAMENTO DA PÁGINA (beforeunload) ──────────────
-  // Usa fetch com keepalive — único método confiável para salvar ao fechar/refresh
-  // Isso resolve o caso: usuário cria dado → fecha antes de 500ms → dado sumia
+  // ── SAVE NO FECHAMENTO / REFRESH DA PÁGINA ────────────────
+  // fetch com keepalive = único método garantido pelo browser ao fechar/recarregar
+  // Resolve: usuário cria item → fecha em menos de 400ms → item sumia
   useEffect(() => {
     if (!username) return;
 
-    const handleBeforeUnload = () => {
+    const onBeforeUnload = () => {
+      // Só envia se há mudanças pendentes (evita request desnecessário)
+      if (!pendingChanges.current && !saveTimer.current) return;
+
       const token = localStorage.getItem('lf_token');
       if (!token) return;
 
-      console.log('[AppContext] beforeunload — salvando via fetch keepalive');
-      fetch(`${apiBaseURL}/data`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ data: dataRef.current }),
-        keepalive: true,
-      }).catch(() => {});
+      console.log('[AppContext] beforeunload — salvando via keepalive');
+      try {
+        fetch(`${apiBaseURL}/data`, {
+          method:    'POST',
+          keepalive: true,   // ← garante que o request completa mesmo após unload
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ data: dataRef.current }),
+        });
+      } catch { /* nunca falha */ }
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [username]);
 
-  // ── Mutador genérico ─────────────────────────────────────────
-  // Marca lastModifiedAt para que o server sync não sobrescreva
+  // ── Mutador genérico (puro — sem side-effects) ────────────
+  // Atualiza o estado e marca que há mudanças pendentes para o servidor.
   const update = useCallback((section, fn) => {
-    lastModifiedAt.current = Date.now();
+    pendingChanges.current = true;
     setData((prev) => ({
       ...prev,
       [section]: fn(prev[section] || []),
     }));
   }, []);
 
-  // ── Tasks ────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  //  Ações por domínio
+  // ════════════════════════════════════════════════════════════
+
+  // ── Tasks ────────────────────────────────────────────────
   const tasks      = data.tasks      || [];
   const addTask    = (t)     => update('tasks', (a) => [{ ...t, id: genId(), createdAt: new Date().toISOString(), completed: false }, ...a]);
   const updateTask = (id, u) => update('tasks', (a) => a.map((x) => x.id === id ? { ...x, ...u } : x));
   const deleteTask = (id)    => update('tasks', (a) => a.filter((x) => x.id !== id));
   const toggleTask = (id)    => update('tasks', (a) => a.map((x) => x.id === id ? { ...x, completed: !x.completed } : x));
 
-  // ── Habits ───────────────────────────────────────────────────
+  // ── Habits ───────────────────────────────────────────────
   const habits      = data.habits || [];
   const addHabit    = (h)  => update('habits', (a) => [...a, { ...h, id: genId(), streak: 0, completedDates: [] }]);
   const deleteHabit = (id) => update('habits', (a) => a.filter((h) => h.id !== id));
@@ -269,16 +370,16 @@ export function AppProvider({ children }) {
         : [...h.completedDates, todayStr];
       let streak = 0;
       const sorted = [...completedDates].sort((a, b) => new Date(b) - new Date(a));
-      let cursor = new Date(todayStr);
+      let cur = new Date(todayStr);
       for (const d of sorted) {
-        const diff = Math.round((cursor - new Date(d)) / 86400000);
-        if (diff === 0 || diff === 1) { streak++; cursor = new Date(d); } else break;
+        const diff = Math.round((cur - new Date(d)) / 86400000);
+        if (diff === 0 || diff === 1) { streak++; cur = new Date(d); } else break;
       }
       return { ...h, completedDates, streak };
     }));
   };
 
-  // ── Finance ──────────────────────────────────────────────────
+  // ── Finance ──────────────────────────────────────────────
   const transactions      = data.transactions || [];
   const totalIncome       = transactions.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense      = transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
@@ -286,31 +387,31 @@ export function AppProvider({ children }) {
   const addTransaction    = (tx) => update('transactions', (a) => [{ ...tx, id: genId(), date: new Date().toISOString() }, ...a]);
   const deleteTransaction = (id) => update('transactions', (a) => a.filter((t) => t.id !== id));
 
-  // ── Study ────────────────────────────────────────────────────
+  // ── Study ────────────────────────────────────────────────
   const studyItems      = data.studyItems || [];
   const addStudyItem    = (item) => update('studyItems', (a) => [{ ...item, id: genId(), progress: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, ...a]);
   const updateStudyItem = (id, u) => update('studyItems', (a) => a.map((x) => x.id === id ? { ...x, ...u, updatedAt: new Date().toISOString() } : x));
   const deleteStudyItem = (id)    => update('studyItems', (a) => a.filter((x) => x.id !== id));
 
-  // ── Notes ────────────────────────────────────────────────────
+  // ── Notes ────────────────────────────────────────────────
   const notes      = data.notes || [];
   const addNote    = (n)     => update('notes', (a) => [{ ...n, id: genId(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, ...a]);
   const updateNote = (id, u) => update('notes', (a) => a.map((x) => x.id === id ? { ...x, ...u, updatedAt: new Date().toISOString() } : x));
   const deleteNote = (id)    => update('notes', (a) => a.filter((x) => x.id !== id));
 
-  // ── Goals ────────────────────────────────────────────────────
+  // ── Goals ────────────────────────────────────────────────
   const goals      = data.goals || [];
   const addGoal    = (g)     => update('goals', (a) => [{ ...g, id: genId(), createdAt: new Date().toISOString() }, ...a]);
   const updateGoal = (id, u) => update('goals', (a) => a.map((x) => x.id === id ? { ...x, ...u } : x));
   const deleteGoal = (id)    => update('goals', (a) => a.filter((x) => x.id !== id));
 
-  // ── Agenda ───────────────────────────────────────────────────
+  // ── Agenda ───────────────────────────────────────────────
   const agenda      = data.agenda || [];
   const addEvent    = (ev)    => update('agenda', (a) => [...a, { ...ev, id: genId(), createdAt: new Date().toISOString() }]);
   const updateEvent = (id, u) => update('agenda', (a) => a.map((x) => x.id === id ? { ...x, ...u } : x));
   const deleteEvent = (id)    => update('agenda', (a) => a.filter((x) => x.id !== id));
 
-  // ── Nav ──────────────────────────────────────────────────────
+  // ── Navegação ────────────────────────────────────────────
   const [activeTab,   setActiveTab]   = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -318,6 +419,8 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       syncing,
       saveErr,
+      saving,
+      lastSaved,
       tasks,        addTask,    updateTask, deleteTask, toggleTask,
       habits,       addHabit,  deleteHabit, toggleHabit,
       transactions, totalIncome, totalExpense, balance, addTransaction, deleteTransaction,

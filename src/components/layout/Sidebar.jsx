@@ -3,21 +3,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useApp }  from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import {
-  LayoutDashboard, CheckSquare, Flame, Wallet, BookOpen,
-  Zap, Timer, StickyNote, Target, X, CalendarCheck, Calendar, Shield, Lightbulb,
+  LayoutDashboard, CheckSquare, Flame, Wallet,
+  Leaf, X, Target, CalendarCheck, Calendar, Shield, Lightbulb,
 } from 'lucide-react';
 
 const getNavItems = (isAdmin) => [
-  { id: 'dashboard', label: 'Dashboard',      icon: LayoutDashboard, shortcut: '1' },
-  { id: 'tasks',     label: 'Tarefas',         icon: CheckSquare,     shortcut: '2' },
-  { id: 'habits',    label: 'Hábitos',         icon: Flame,           shortcut: '3' },
-  { id: 'agenda',    label: 'Agenda',          icon: Calendar,        shortcut: '4' },
-  { id: 'finance',   label: 'Financeiro',      icon: Wallet,          shortcut: '5' },
-  { id: 'goals',     label: 'Metas',           icon: Target,          shortcut: '6' },
-  { id: 'study',     label: 'Estudos',         icon: BookOpen,        shortcut: '7' },
-  { id: 'notes',     label: 'Notas',           icon: StickyNote,      shortcut: '8' },
-  { id: 'pomodoro',  label: 'Pomodoro',        icon: Timer,           shortcut: '9' },
-  { id: 'weekly',    label: 'Revisão Semanal', icon: CalendarCheck,   shortcut: '0' },
+  { id: 'dashboard', label: 'Dashboard',       icon: LayoutDashboard, shortcut: '1' },
+  { id: 'tasks',     label: 'Tarefas',          icon: CheckSquare,     shortcut: '2' },
+  { id: 'habits',    label: 'Hábitos',          icon: Flame,           shortcut: '3' },
+  { id: 'agenda',    label: 'Agenda',           icon: Calendar,        shortcut: '4' },
+  { id: 'finance',   label: 'Financeiro',       icon: Wallet,          shortcut: '5' },
+  { id: 'goals',     label: 'Metas',            icon: Target,          shortcut: '6' },
+  { id: 'weekly',    label: 'Revisão Semanal',  icon: CalendarCheck,   shortcut: '7' },
   ...(!isAdmin ? [{ id: 'feedback', label: 'Sugestões', icon: Lightbulb, shortcut: 'F' }] : []),
   ...(isAdmin  ? [{ id: 'admin',    label: 'Admin',     icon: Shield,    shortcut: 'A', isAdmin: true }] : []),
 ];
@@ -62,9 +59,9 @@ export default function Sidebar() {
   const { activeTab, setActiveTab, tasks, habits, sidebarOpen, setSidebarOpen } = useApp();
   const { currentUser } = useAuth();
 
-  const isAdmin    = currentUser?.role === 'admin';
-  const NAV_ITEMS  = getNavItems(isAdmin);
-  const todayStr   = new Date().toISOString().split('T')[0];
+  const isAdmin   = currentUser?.role === 'admin';
+  const NAV_ITEMS = getNavItems(isAdmin);
+  const todayStr  = new Date().toISOString().split('T')[0];
   const pendingTasks = tasks.filter((t) => !t.completed).length;
   const habitsLeft   = habits.filter((h) => !h.completedDates.includes(todayStr)).length;
   const badges = { tasks: pendingTasks || null, habits: habitsLeft || null };
@@ -80,11 +77,11 @@ export default function Sidebar() {
         <div className="flex items-center gap-2.5">
           <motion.div
             className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: 'var(--blue)', boxShadow: '0 2px 8px var(--blue-bg)' }}
+            style={{ background: 'var(--blue)', boxShadow: '0 2px 10px rgba(58,90,64,0.35)' }}
             whileHover={{ rotate: 15, scale: 1.1 }}
             transition={{ type: 'spring', stiffness: 300 }}
           >
-            <Zap size={16} style={{ color: 'var(--on-blue)' }} fill="var(--on-blue)" />
+            <Leaf size={15} style={{ color: 'var(--on-blue)' }} strokeWidth={2} />
           </motion.div>
           <span className="font-bold text-lg tracking-tight" style={{ color: 'var(--text)' }}>LifeFlow</span>
         </div>
@@ -102,10 +99,7 @@ export default function Sidebar() {
       {currentUser && (
         <motion.div
           className="mx-1 mb-5 px-3 py-3 rounded-xl"
-          style={{
-            background: 'var(--blue-bg)',
-            border: '1px solid var(--blue-border)',
-          }}
+          style={{ background: 'var(--blue-bg)', border: '1px solid var(--blue-border)' }}
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -121,7 +115,7 @@ export default function Sidebar() {
               <p className="text-sm font-semibold leading-none truncate" style={{ color: 'var(--text)' }}>
                 {currentUser.name}
               </p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--blue)' }}>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>
                 {isAdmin ? 'Administrador' : 'Usuário'}
               </p>
             </div>
@@ -129,7 +123,6 @@ export default function Sidebar() {
         </motion.div>
       )}
 
-      {/* Nav section */}
       <div className="mb-2 px-2">
         <p className="label text-[10px]">MENU</p>
       </div>
@@ -152,7 +145,6 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Footer */}
       <div className="px-2 mt-4 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
         <p className="text-[11px] font-mono" style={{ color: 'var(--text-4)' }}>
           Ctrl+K · comandos rápidos
@@ -177,7 +169,7 @@ export default function Sidebar() {
           <>
             <motion.div
               className="fixed inset-0 z-40 lg:hidden"
-              style={{ background: 'rgba(0,0,0,0.6)' }}
+              style={{ background: 'rgba(0,0,0,0.7)' }}
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={() => setSidebarOpen(false)}

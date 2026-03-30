@@ -6,7 +6,7 @@ import { useState, useCallback } from 'react';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 import { useAuth }  from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { Eye, EyeOff, Lock, User, AlertCircle, Loader2, Zap } from 'lucide-react';
+import { Eye, EyeOff, Lock, User, AlertCircle, Loader2, Leaf } from 'lucide-react';
 
 // ── Abajur SVG ───────────────────────────────────────────────────────────────
 
@@ -278,7 +278,7 @@ export default function LoginPage() {
                   transition={{ type: 'spring', stiffness: 280, damping: 18, delay: 0.1 }}
                   whileHover={{ scale: 1.08, rotate: 6 }}
                 >
-                  <Zap size={22} style={{ color: 'var(--on-blue)' }} fill="var(--on-blue)" />
+                  <Leaf size={22} style={{ color: 'var(--on-blue)' }} strokeWidth={1.8} />
                 </motion.div>
                 <motion.h1
                   className="text-2xl font-bold tracking-tight"
@@ -296,7 +296,7 @@ export default function LoginPage() {
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.2 }}
                 >
-                  Organização pessoal inteligente
+                  Melhore sua vida com o LifeFlow
                 </motion.p>
               </div>
 

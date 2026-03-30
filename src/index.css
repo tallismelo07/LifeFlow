@@ -3,41 +3,46 @@
 @tailwind utilities;
 
 /* ══════════════════════════════════════════════════════════════
-   DESIGN TOKENS — LifeFlow v3  ·  Estilo Notion / Linear
-   Paleta monocromática: #f8f9fa → #212529
+   DESIGN TOKENS — LifeFlow v5
+   Paleta: Preto #000000 · Branco #f8f9fa · Cinzas Bootstrap
+   Detalhe opcional: Verde #3a5a40
    ══════════════════════════════════════════════════════════════ */
 
 /* ── Dark mode (padrão) ──────────────────────────────────────── */
 :root {
   /* ── Superfícies ─────────────────────────────────────────── */
-  --bg:           #212529;   /* fundo principal  */
-  --bg-soft:      #2b3035;   /* cards / painéis  */
-  --bg-muted:     #343a40;   /* inputs / subtile */
-  --bg-raised:    #3d444b;   /* hover / ativo    */
+  --bg:           #000000;   /* fundo principal — preto puro    */
+  --bg-soft:      #111111;   /* cards / painéis                 */
+  --bg-muted:     #1c1c1c;   /* inputs / sutil                  */
+  --bg-raised:    #282828;   /* hover / ativo                   */
 
   /* ── Texto ───────────────────────────────────────────────── */
-  --text:         #f8f9fa;   /* primário         */
-  --text-2:       #e9ecef;   /* secundário       */
-  --text-3:       #adb5bd;   /* terciário        */
-  --text-4:       #6c757d;   /* muito sutil      */
+  --text:         #f8f9fa;   /* primário — branco suave         */
+  --text-2:       #dee2e6;   /* secundário                      */
+  --text-3:       #adb5bd;   /* terciário                       */
+  --text-4:       #6c757d;   /* muito sutil                     */
 
   /* ── Bordas ──────────────────────────────────────────────── */
-  --border:        rgba(248,249,250,0.07);
-  --border-md:     rgba(248,249,250,0.13);
-  --border-strong: rgba(248,249,250,0.22);
+  --border:        rgba(255,255,255,0.06);
+  --border-md:     rgba(255,255,255,0.10);
+  --border-strong: rgba(255,255,255,0.18);
 
-  /* ── Cor de destaque = branco puro (acento invertido) ─────── */
-  --blue:          #f8f9fa;
-  --blue-d:        #dee2e6;
-  --blue-bg:       rgba(248,249,250,0.07);
-  --blue-border:   rgba(248,249,250,0.17);
-  /* Texto sobre fundo --blue (garante contraste em qualquer tema) */
-  --on-blue:       #212529;
+  /* ── Cor de destaque = branco (dark) / preto (light) ──────
+     --blue mantém o nome por compatibilidade com os componentes */
+  --blue:          #f8f9fa;               /* branco = ação primária no dark */
+  --blue-d:        #dee2e6;               /* ligeiramente menos branco      */
+  --blue-bg:       rgba(255,255,255,0.07);
+  --blue-border:   rgba(255,255,255,0.14);
+  --on-blue:       #000000;               /* texto sobre botão primário      */
 
-  /* ── Status semânticos (manter alguma cor para legibilidade) ─ */
-  --green:         #52c97e;
-  --green-bg:      rgba(82,201,126,0.10);
-  --green-border:  rgba(82,201,126,0.22);
+  /* ── Accent verde (detalhe sutil) ───────────────────────── */
+  --accent:        #3a5a40;
+  --accent-light:  #4a7c59;
+
+  /* ── Status semânticos ───────────────────────────────────── */
+  --green:         #4caf7d;
+  --green-bg:      rgba(76,175,125,0.10);
+  --green-border:  rgba(76,175,125,0.22);
   --red:           #e05c5c;
   --red-bg:        rgba(224,92,92,0.11);
   --red-border:    rgba(224,92,92,0.24);
@@ -48,17 +53,17 @@
   --teal:          #5bbcaa;
 
   /* ── Layout ──────────────────────────────────────────────── */
-  --sidebar-bg:    #1a1d20;
-  --header-bg:     rgba(33,37,41,0.96);
+  --sidebar-bg:    #000000;
+  --header-bg:     rgba(0,0,0,0.96);
 
   /* ── Scrollbar ───────────────────────────────────────────── */
-  --scrollbar:     #343a40;
-  --scrollbar-h:   #495057;
+  --scrollbar:     #2c2c2c;
+  --scrollbar-h:   #3d3d3d;
 
   /* ── Sombras ─────────────────────────────────────────────── */
-  --shadow-card:  0 1px 2px rgba(0,0,0,0.5),  0 1px 3px rgba(0,0,0,0.35);
-  --shadow-md:    0 4px 14px rgba(0,0,0,0.60), 0 2px 5px rgba(0,0,0,0.38);
-  --shadow-lg:    0 10px 28px rgba(0,0,0,0.70), 0 4px 9px rgba(0,0,0,0.42);
+  --shadow-card:  0 1px 3px rgba(0,0,0,0.80),  0 1px 2px rgba(0,0,0,0.60);
+  --shadow-md:    0 4px 16px rgba(0,0,0,0.85),  0 2px 6px rgba(0,0,0,0.60);
+  --shadow-lg:    0 12px 32px rgba(0,0,0,0.90),  0 4px 10px rgba(0,0,0,0.65);
 }
 
 /* ── Light mode ──────────────────────────────────────────────── */
@@ -68,25 +73,27 @@ html.light {
   --bg-muted:     #e9ecef;
   --bg-raised:    #dee2e6;
 
-  --text:         #212529;
-  --text-2:       #343a40;
-  --text-3:       #6c757d;
+  --text:         #000000;
+  --text-2:       #212529;
+  --text-3:       #495057;
   --text-4:       #adb5bd;
 
-  --border:        rgba(33,37,41,0.07);
-  --border-md:     rgba(33,37,41,0.13);
-  --border-strong: rgba(33,37,41,0.22);
+  --border:        rgba(0,0,0,0.06);
+  --border-md:     rgba(0,0,0,0.10);
+  --border-strong: rgba(0,0,0,0.20);
 
-  /* Acento = quase preto (invertido) */
-  --blue:          #212529;
+  --blue:          #212529;               /* quase preto = ação primária no light */
   --blue-d:        #343a40;
-  --blue-bg:       rgba(33,37,41,0.07);
-  --blue-border:   rgba(33,37,41,0.17);
-  --on-blue:       #f8f9fa;
+  --blue-bg:       rgba(0,0,0,0.06);
+  --blue-border:   rgba(0,0,0,0.13);
+  --on-blue:       #ffffff;
 
-  --green:         #2d9a57;
-  --green-bg:      rgba(45,154,87,0.09);
-  --green-border:  rgba(45,154,87,0.22);
+  --accent:        #3a5a40;
+  --accent-light:  #4a7c59;
+
+  --green:         #2a9d57;
+  --green-bg:      rgba(42,157,87,0.09);
+  --green-border:  rgba(42,157,87,0.22);
   --red:           #c53c3c;
   --red-bg:        rgba(197,60,60,0.09);
   --red-border:    rgba(197,60,60,0.22);
@@ -97,14 +104,14 @@ html.light {
   --teal:          #0d9488;
 
   --sidebar-bg:    #ffffff;
-  --header-bg:     rgba(248,249,250,0.96);
+  --header-bg:     rgba(248,249,250,0.97);
 
-  --scrollbar:     #dee2e6;
-  --scrollbar-h:   #ced4da;
+  --scrollbar:     #ced4da;
+  --scrollbar-h:   #adb5bd;
 
-  --shadow-card:  0 1px 2px rgba(33,37,41,0.07), 0 1px 3px rgba(33,37,41,0.05);
-  --shadow-md:    0 4px 12px rgba(33,37,41,0.10), 0 2px 4px rgba(33,37,41,0.06);
-  --shadow-lg:    0 10px 24px rgba(33,37,41,0.12), 0 4px 8px rgba(33,37,41,0.07);
+  --shadow-card:  0 1px 2px rgba(0,0,0,0.06),  0 1px 3px rgba(0,0,0,0.04);
+  --shadow-md:    0 4px 12px rgba(0,0,0,0.10),  0 2px 4px rgba(0,0,0,0.06);
+  --shadow-lg:    0 10px 24px rgba(0,0,0,0.13),  0 4px 8px rgba(0,0,0,0.07);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -160,13 +167,11 @@ html.light {
   }
   .input-base::placeholder { color: var(--text-4); }
   .input-base:focus {
-    border-color: var(--text-3) !important;
+    border-color: var(--border-strong) !important;
     box-shadow: 0 0 0 3px var(--blue-bg) !important;
   }
 
   /* ── Buttons ─────────────────────────────────────────────── */
-
-  /* Primário: fundo --blue, texto --on-blue (garante contraste) */
   .btn-primary {
     background: var(--blue);
     color: var(--on-blue);
@@ -175,14 +180,16 @@ html.light {
   }
   .btn-primary:hover {
     background: var(--blue-d);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.20);
+  }
+  html.light .btn-primary:hover {
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
   }
   .btn-primary:disabled {
     opacity: 0.4;
     cursor: not-allowed;
   }
 
-  /* Ghost: superfície discreta */
   .btn-ghost {
     background: var(--bg-muted);
     border: 1px solid var(--border-md);
@@ -195,7 +202,6 @@ html.light {
     border-color: var(--border-strong);
   }
 
-  /* Danger */
   .btn-danger {
     background: var(--red-bg);
     color: var(--red);
@@ -214,11 +220,10 @@ html.light {
     color: var(--text);
     background: var(--bg-raised);
   }
-  /* Ativo: fundo --blue, texto --on-blue (inversão monocromática) */
   .nav-item-active {
     color: var(--on-blue) !important;
     background: var(--blue) !important;
-    box-shadow: 0 1px 6px rgba(0,0,0,0.12);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
   }
   .nav-item-active:hover {
     background: var(--blue-d) !important;
@@ -247,7 +252,7 @@ html.light {
 
   /* ── Task Status ─────────────────────────────────────────── */
   .status-todo       { background: var(--bg-muted);  color: var(--text-3); border: 1px solid var(--border-md); }
-  .status-inprogress { background: var(--blue-bg);   color: var(--text);   border: 1px solid var(--border-md); }
+  .status-inprogress { background: var(--blue-bg);   color: var(--text);   border: 1px solid var(--blue-border); }
   .status-done       { background: var(--green-bg);  color: var(--green);  border: 1px solid var(--green-border); }
 
   /* ── Misc ────────────────────────────────────────────────── */
@@ -258,7 +263,6 @@ html.light {
     @apply flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium;
   }
 
-  /* ── StatCard (ui/index.jsx) ─────────────────────────────── */
   .stat-card {
     background: var(--bg-soft);
     border: 1px solid var(--border);
@@ -295,7 +299,7 @@ html.light {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   LEGACY COLOR MAPPING (compatibilidade com componentes antigos)
+   LEGACY COMPATIBILITY (mantém componentes antigos funcionando)
    ═══════════════════════════════════════════════════════════════ */
 .text-cream        { color: var(--text); }
 .text-cream\/70    { color: var(--text-2); }
@@ -326,10 +330,8 @@ html.light {
 .hover\:bg-white\/8:hover  { background-color: var(--bg-muted); }
 .hover\:bg-white\/10:hover { background-color: var(--bg-raised); }
 
-/* ── Utilitário ink: texto escuro fixo (para uso sobre bg colorido) ── */
-.text-ink { color: #212529 !important; }
+.text-ink { color: var(--text) !important; }
 
-/* Accent colours */
 .accent-lime              { color: var(--green); }
 .text-accent-lime         { color: var(--green); }
 .bg-accent-lime           { background-color: var(--green); }
@@ -365,3 +367,21 @@ html.light {
   50%       { transform: translateY(-4px); }
 }
 .cat-bob { animation: catBob 0.35s ease-in-out infinite; }
+
+/* ═══════════════════════════════════════════════════════════════
+   WELCOME SCREEN — typing cursor
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+.typing-cursor {
+  display: inline-block;
+  width: 3px;
+  height: 1em;
+  background: var(--text);
+  margin-left: 3px;
+  vertical-align: text-bottom;
+  animation: blink 0.85s ease-in-out infinite;
+  border-radius: 2px;
+}
