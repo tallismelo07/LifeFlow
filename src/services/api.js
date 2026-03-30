@@ -19,9 +19,12 @@ const baseURL = import.meta.env.VITE_API_URL
 
 const api = axios.create({
   baseURL,
-  timeout: 15000,   // 15s — Render pode demorar no cold start
+  timeout: 30000,   // 30s — Render cold start pode demorar até 30s no free tier
   headers: { 'Content-Type': 'application/json' },
 });
+
+// Exporta a URL base para uso em fetch com keepalive (beforeunload)
+export { baseURL as apiBaseURL };
 
 // ── Interceptor de request: injeta token JWT ──────────────────────────────────
 api.interceptors.request.use((config) => {

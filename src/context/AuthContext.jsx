@@ -1,7 +1,11 @@
 // src/context/AuthContext.jsx
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { loginRequest, logoutRequest, meRequest, heartbeatRequest, activityUsersRequest } from '../services/authService';
+import {
+  loginRequest, logoutRequest, meRequest,
+  heartbeatRequest, activityUsersRequest,
+  updateProfileRequest,
+} from '../services/authService';
 
 const AuthContext = createContext(null);
 
@@ -12,8 +16,8 @@ export function AuthProvider({ children }) {
       return saved ? JSON.parse(saved) : null;
     } catch { return null; }
   });
-  const [loading,        setLoading]        = useState(true);
-  const [activityUsers,  setActivityUsers]  = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [activityUsers, setActivityUsers] = useState([]);
 
   const fetchActivityUsers = useCallback(async () => {
     try {
@@ -43,7 +47,6 @@ export function AuthProvider({ children }) {
       })
       .finally(() => setLoading(false));
 
-    // Escuta token expirado (disparado pelo interceptor do axios)
     const onExpired = () => setCurrentUser(null);
     window.addEventListener('auth:expired', onExpired);
     return () => window.removeEventListener('auth:expired', onExpired);
@@ -76,10 +79,28 @@ export function AuthProvider({ children }) {
     setCurrentUser(null);
   };
 
+  // Atualiza nome/email do perfil e sincroniza o estado local
+  const updateProfile = useCallback(async (name, email) => {
+    const result = await updateProfileRequest(name, email);
+    if (result.ok) {
+      setCurrentUser((prev) => {
+        if (!prev) return prev;
+        const updated = { ...prev, name: result.name };
+        localStorage.setItem('lf_user', JSON.stringify(updated));
+        return updated;
+      });
+    }
+    return result;
+  }, []);
+
   const isAdmin = currentUser?.role === 'admin';
 
   return (
-    <AuthContext.Provider value={{ currentUser, loading, login, logout, isAdmin, activityUsers, fetchActivityUsers }}>
+    <AuthContext.Provider value={{
+      currentUser, loading, login, logout,
+      isAdmin, activityUsers, fetchActivityUsers,
+      updateProfile,
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,5 +1,5 @@
 // src/components/admin/AdminPanel.jsx
-// Painel do admin: atividade dos usuários + feedbacks + reset de senha
+// Painel do admin: atividade, feedbacks, logs, segurança
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,11 +8,13 @@ import {
   getFeedbacksRequest,
   getActivityRequest,
   resetPasswordRequest,
+  getLogsRequest,
 } from '../../services/authService';
 import {
   Shield, Wifi, WifiOff, Clock, Users, RefreshCw,
   MessageSquare, KeyRound, Eye, EyeOff, CheckCircle2,
-  Loader2, X, ChevronRight,
+  Loader2, X, ChevronRight, ScrollText, AlertTriangle,
+  Info, AlertCircle,
 } from 'lucide-react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -30,6 +32,7 @@ function timeAgo(iso) {
 }
 
 function fmtDate(iso) {
+  if (!iso) return '—';
   return new Date(iso).toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: '2-digit',
     hour: '2-digit', minute: '2-digit',
@@ -39,19 +42,20 @@ function fmtDate(iso) {
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'activity',  label: 'Atividade',  Icon: Users },
-  { id: 'feedbacks', label: 'Feedbacks',  Icon: MessageSquare },
-  { id: 'security',  label: 'Segurança',  Icon: Shield },
+  { id: 'activity',  label: 'Atividade', Icon: Users },
+  { id: 'feedbacks', label: 'Feedbacks', Icon: MessageSquare },
+  { id: 'logs',      label: 'Logs',      Icon: ScrollText },
+  { id: 'security',  label: 'Segurança', Icon: Shield },
 ];
 
 // ── Modal Reset de Senha ──────────────────────────────────────────────────────
 
 function ResetPasswordModal({ user, onClose }) {
-  const [newPwd,   setNewPwd]   = useState('');
-  const [showPwd,  setShowPwd]  = useState(false);
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState('');
-  const [success,  setSuccess]  = useState(false);
+  const [newPwd,  setNewPwd]  = useState('');
+  const [showPwd, setShowPwd] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
+  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -84,10 +88,8 @@ function ResetPasswordModal({ user, onClose }) {
         exit={{ opacity: 0, scale: 0.94 }}
         transition={{ type: 'spring', stiffness: 320, damping: 28 }}
       >
-        <div
-          className="rounded-2xl p-6"
-          style={{ background: 'var(--bg-soft)', border: '1px solid var(--border-md)', boxShadow: 'var(--shadow-lg)' }}
-        >
+        <div className="rounded-2xl p-6"
+          style={{ background: 'var(--bg-soft)', border: '1px solid var(--border-md)', boxShadow: 'var(--shadow-lg)' }}>
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center"
@@ -99,8 +101,7 @@ function ResetPasswordModal({ user, onClose }) {
                 <p className="text-xs" style={{ color: 'var(--text-3)' }}>@{user.username}</p>
               </div>
             </div>
-            <button onClick={onClose}
-              className="p-1.5 rounded-xl"
+            <button onClick={onClose} className="p-1.5 rounded-xl"
               style={{ background: 'var(--bg-muted)', color: 'var(--text-3)' }}>
               <X size={14} />
             </button>
@@ -158,8 +159,8 @@ function ResetPasswordModal({ user, onClose }) {
 // ── Aba: Atividade ────────────────────────────────────────────────────────────
 
 function ActivityTab({ currentUser }) {
-  const [users,   setUsers]   = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [users,       setUsers]       = useState([]);
+  const [loading,     setLoading]     = useState(true);
   const [resetTarget, setResetTarget] = useState(null);
 
   const load = useCallback(async () => {
@@ -213,30 +214,17 @@ function ActivityTab({ currentUser }) {
       ) : others.length === 0 ? (
         <p className="text-center py-8 text-sm" style={{ color: 'var(--text-4)' }}>Nenhum usuário encontrado.</p>
       ) : (
-        <div
-          className="rounded-2xl overflow-hidden"
-          style={{ border: '1px solid var(--border)' }}
-        >
+        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
           {others.map((u, idx) => {
             const online = !!u.is_online;
             return (
-              <div
-                key={u.id}
+              <div key={u.id}
                 className="flex items-center gap-4 px-4 py-3.5 transition-colors group"
-                style={{
-                  background: 'var(--bg-soft)',
-                  borderTop: idx > 0 ? '1px solid var(--border)' : 'none',
-                }}
-              >
-                {/* Avatar */}
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm shrink-0"
-                  style={{ backgroundColor: u.color || '#6B7280' }}
-                >
+                style={{ background: 'var(--bg-soft)', borderTop: idx > 0 ? '1px solid var(--border)' : 'none' }}>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm shrink-0"
+                  style={{ backgroundColor: u.color || '#6B7280' }}>
                   {u.avatar || u.name?.[0]?.toUpperCase() || '?'}
                 </div>
-
-                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-sm truncate" style={{ color: 'var(--text)' }}>{u.name}</p>
@@ -245,33 +233,20 @@ function ActivityTab({ currentUser }) {
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <Clock size={10} style={{ color: 'var(--text-4)' }} />
                     <span className="text-xs" style={{ color: 'var(--text-4)' }}>
-                      {online
-                        ? `Visto ${timeAgo(u.last_seen)}`
-                        : u.last_seen
-                          ? `Último acesso ${timeAgo(u.last_seen)}`
-                          : 'Nunca acessou'}
+                      {online ? `Visto ${timeAgo(u.last_seen)}` : u.last_seen ? `Último acesso ${timeAgo(u.last_seen)}` : 'Nunca acessou'}
                     </span>
                   </div>
                 </div>
-
-                {/* Status badge */}
-                <div
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold shrink-0"
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold shrink-0"
                   style={online
                     ? { background: 'var(--green-bg)', border: '1px solid var(--green-border)', color: 'var(--green)' }
-                    : { background: 'var(--bg-muted)', border: '1px solid var(--border-md)', color: 'var(--text-3)' }}
-                >
+                    : { background: 'var(--bg-muted)', border: '1px solid var(--border-md)', color: 'var(--text-3)' }}>
                   {online ? <Wifi size={10} /> : <WifiOff size={10} />}
                   {online ? 'Online' : 'Offline'}
                 </div>
-
-                {/* Reset senha */}
-                <button
-                  onClick={() => setResetTarget(u)}
-                  title="Resetar senha"
+                <button onClick={() => setResetTarget(u)} title="Resetar senha"
                   className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all"
-                  style={{ color: 'var(--text-4)', background: 'var(--bg-muted)' }}
-                >
+                  style={{ color: 'var(--text-4)', background: 'var(--bg-muted)' }}>
                   <KeyRound size={13} />
                 </button>
               </div>
@@ -325,10 +300,8 @@ function FeedbacksTab() {
           <Loader2 size={24} className="animate-spin" style={{ color: 'var(--text-4)' }} />
         </div>
       ) : feedbacks.length === 0 ? (
-        <div
-          className="rounded-2xl p-8 text-center"
-          style={{ background: 'var(--bg-soft)', border: '1px solid var(--border)' }}
-        >
+        <div className="rounded-2xl p-8 text-center"
+          style={{ background: 'var(--bg-soft)', border: '1px solid var(--border)' }}>
           <MessageSquare size={32} className="mx-auto mb-3" style={{ color: 'var(--text-4)' }} />
           <p className="text-sm" style={{ color: 'var(--text-3)' }}>Nenhum feedback ainda.</p>
           <p className="text-xs mt-1" style={{ color: 'var(--text-4)' }}>Yasmin e Pedro podem enviar sugestões pela seção Feedback.</p>
@@ -338,48 +311,139 @@ function FeedbacksTab() {
           {feedbacks.map((fb) => {
             const isOpen  = expanded === fb.id;
             const preview = fb.message.length > 80 ? fb.message.slice(0, 80) + '…' : fb.message;
-
             return (
-              <motion.div
-                key={fb.id}
-                layout
+              <motion.div key={fb.id} layout
                 className="rounded-xl overflow-hidden cursor-pointer"
                 style={{ background: 'var(--bg-soft)', border: '1px solid var(--border)' }}
-                onClick={() => setExpanded(isOpen ? null : fb.id)}
-              >
+                onClick={() => setExpanded(isOpen ? null : fb.id)}>
                 <div className="flex items-start gap-3 px-4 py-3.5">
-                  {/* Avatar */}
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5"
-                    style={{ backgroundColor: fb.color || '#6B7280' }}
-                  >
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5"
+                    style={{ backgroundColor: fb.color || '#6B7280' }}>
                     {fb.avatar}
                   </div>
-
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>{fb.user_name}</span>
                       <span className="text-xs font-mono" style={{ color: 'var(--text-4)' }}>@{fb.username}</span>
-                      <span className="text-xs ml-auto shrink-0" style={{ color: 'var(--text-4)' }}>
-                        {fmtDate(fb.created_at)}
-                      </span>
+                      <span className="text-xs ml-auto shrink-0" style={{ color: 'var(--text-4)' }}>{fmtDate(fb.created_at)}</span>
                     </div>
                     <p className="text-sm leading-relaxed" style={{ color: 'var(--text-2)' }}>
                       {isOpen ? fb.message : preview}
                     </p>
                   </div>
-
-                  <ChevronRight
-                    size={14}
-                    style={{
-                      color: 'var(--text-4)',
-                      transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
-                      transition: 'transform 0.2s',
-                      flexShrink: 0,
-                    }}
-                  />
+                  <ChevronRight size={14} style={{
+                    color: 'var(--text-4)',
+                    transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.2s',
+                    flexShrink: 0,
+                  }} />
                 </div>
               </motion.div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Aba: Logs ─────────────────────────────────────────────────────────────────
+
+const LOG_STYLES = {
+  error: { bg: 'var(--red-bg)',   border: 'var(--red-border)',   color: 'var(--red)',   Icon: AlertCircle },
+  warn:  { bg: 'var(--amber-bg)', border: 'var(--amber-border)', color: 'var(--amber)', Icon: AlertTriangle },
+  info:  { bg: 'var(--bg-soft)',  border: 'var(--border)',        color: 'var(--text-3)', Icon: Info },
+};
+
+function LogsTab() {
+  const [logs,    setLogs]    = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter,  setFilter]  = useState('all'); // 'all' | 'error' | 'warn' | 'info'
+
+  const load = useCallback(async () => {
+    try {
+      const data = await getLogsRequest(200);
+      setLogs(data);
+    } catch { /* silencioso */ } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = filter === 'all' ? logs : logs.filter((l) => l.level === filter);
+  const errCount  = logs.filter((l) => l.level === 'error').length;
+  const warnCount = logs.filter((l) => l.level === 'warn').length;
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        {/* Filtros */}
+        <div className="flex gap-1">
+          {[
+            { id: 'all',   label: `Todos (${logs.length})` },
+            { id: 'error', label: `Erros (${errCount})` },
+            { id: 'warn',  label: `Avisos (${warnCount})` },
+            { id: 'info',  label: 'Info' },
+          ].map(({ id, label }) => (
+            <button key={id} onClick={() => setFilter(id)}
+              className="text-xs px-2.5 py-1 rounded-lg font-medium transition-all"
+              style={filter === id
+                ? { background: 'var(--blue)', color: 'var(--on-blue)' }
+                : { background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <button onClick={load}
+          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl transition-colors"
+          style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)' }}>
+          <RefreshCw size={12} /> Atualizar
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-10">
+          <Loader2 size={24} className="animate-spin" style={{ color: 'var(--text-4)' }} />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-2xl p-8 text-center"
+          style={{ background: 'var(--bg-soft)', border: '1px solid var(--border)' }}>
+          <ScrollText size={32} className="mx-auto mb-3" style={{ color: 'var(--text-4)' }} />
+          <p className="text-sm" style={{ color: 'var(--text-3)' }}>Nenhum log encontrado.</p>
+        </div>
+      ) : (
+        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+          {filtered.map((log, idx) => {
+            const style = LOG_STYLES[log.level] || LOG_STYLES.info;
+            const { Icon } = style;
+            return (
+              <div key={log.id}
+                className="flex items-start gap-3 px-4 py-2.5"
+                style={{
+                  background: style.bg,
+                  borderTop: idx > 0 ? `1px solid ${style.border}` : 'none',
+                }}>
+                <Icon size={13} style={{ color: style.color, flexShrink: 0, marginTop: 3 }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-mono leading-relaxed" style={{ color: style.color }}>
+                    {log.message}
+                  </p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] font-mono" style={{ color: 'var(--text-4)' }}>
+                      [{log.source}]
+                    </span>
+                    {log.username && (
+                      <span className="text-[10px]" style={{ color: 'var(--text-4)' }}>
+                        @{log.username}
+                      </span>
+                    )}
+                    <span className="text-[10px] ml-auto" style={{ color: 'var(--text-4)' }}>
+                      {fmtDate(log.created_at)}
+                    </span>
+                  </div>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -393,10 +457,8 @@ function FeedbacksTab() {
 function SecurityTab() {
   return (
     <div className="space-y-4">
-      <div
-        className="rounded-xl p-4 flex gap-3"
-        style={{ background: 'var(--amber-bg)', border: '1px solid var(--amber-border)' }}
-      >
+      <div className="rounded-xl p-4 flex gap-3"
+        style={{ background: 'var(--amber-bg)', border: '1px solid var(--amber-border)' }}>
         <Shield size={16} style={{ color: 'var(--amber)', flexShrink: 0, marginTop: 2 }} />
         <div>
           <p className="text-sm font-semibold" style={{ color: 'var(--amber)' }}>Acesso restrito ao admin</p>
@@ -408,16 +470,14 @@ function SecurityTab() {
         </div>
       </div>
 
-      <div
-        className="rounded-xl p-4"
-        style={{ background: 'var(--bg-soft)', border: '1px solid var(--border)' }}
-      >
+      <div className="rounded-xl p-4" style={{ background: 'var(--bg-soft)', border: '1px solid var(--border)' }}>
         <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text)' }}>
           Visibilidade de dados
         </h4>
         {[
           { label: 'Ver usuários e status online', allowed: true },
           { label: 'Ver feedbacks e sugestões',    allowed: true },
+          { label: 'Ver logs do sistema',          allowed: true },
           { label: 'Resetar senha de usuários',    allowed: true },
           { label: 'Ver tarefas de outros',        allowed: false },
           { label: 'Ver notas de outros',          allowed: false },
@@ -425,12 +485,10 @@ function SecurityTab() {
         ].map(({ label, allowed }) => (
           <div key={label} className="flex items-center gap-3 py-2"
             style={{ borderTop: '1px solid var(--border)' }}>
-            <span
-              className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+            <span className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
               style={allowed
                 ? { background: 'var(--green-bg)', color: 'var(--green)' }
-                : { background: 'var(--red-bg)', color: 'var(--red)' }}
-            >
+                : { background: 'var(--red-bg)',   color: 'var(--red)'   }}>
               {allowed ? '✓' : '✗'}
             </span>
             <span className="text-xs" style={{ color: allowed ? 'var(--text-2)' : 'var(--text-4)' }}>
@@ -460,10 +518,8 @@ export default function AdminPanel() {
     >
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div
-          className="w-10 h-10 rounded-2xl flex items-center justify-center"
-          style={{ background: 'var(--amber-bg)', border: '1px solid var(--amber-border)' }}
-        >
+        <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
+          style={{ background: 'var(--amber-bg)', border: '1px solid var(--amber-border)' }}>
           <Shield size={18} style={{ color: 'var(--amber)' }} />
         </div>
         <div>
@@ -473,20 +529,15 @@ export default function AdminPanel() {
       </div>
 
       {/* Tab bar */}
-      <div
-        className="flex p-1 rounded-2xl gap-1"
-        style={{ background: 'var(--bg-muted)', border: '1px solid var(--border)' }}
-      >
+      <div className="flex p-1 rounded-2xl gap-1"
+        style={{ background: 'var(--bg-muted)', border: '1px solid var(--border)' }}>
         {TABS.map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium transition-all"
+          <button key={id} onClick={() => setActiveTab(id)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium transition-all"
             style={activeTab === id
               ? { background: 'var(--blue)', color: 'var(--on-blue)' }
-              : { color: 'var(--text-3)' }}
-          >
-            <Icon size={14} />
+              : { color: 'var(--text-3)' }}>
+            <Icon size={13} />
             <span className="hidden sm:block">{label}</span>
           </button>
         ))}
@@ -503,6 +554,7 @@ export default function AdminPanel() {
         >
           {activeTab === 'activity'  && <ActivityTab currentUser={currentUser} />}
           {activeTab === 'feedbacks' && <FeedbacksTab />}
+          {activeTab === 'logs'      && <LogsTab />}
           {activeTab === 'security'  && <SecurityTab />}
         </motion.div>
       </AnimatePresence>

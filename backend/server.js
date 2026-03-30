@@ -1,5 +1,5 @@
 // ============================================================
-//  server.js — LifeFlow Backend v4
+//  server.js — LifeFlow Backend v5
 //  Node.js + Express + JWT + bcryptjs + SQLite (better-sqlite3)
 //  Porta: 3001
 // ============================================================
@@ -59,6 +59,16 @@ db.pragma('journal_mode = WAL');
 db.pragma('synchronous = NORMAL');
 db.pragma('foreign_keys = ON');
 
+// ── Helper de log para o banco ───────────────────────────────
+// Registra eventos importantes sem lançar erros
+function logDB(level, message, source = 'system', userId = null) {
+  try {
+    db.prepare(
+      'INSERT INTO logs (level, message, source, user_id) VALUES (?, ?, ?, ?)'
+    ).run(level, message, source, userId || null);
+  } catch { /* nunca falha */ }
+}
+
 function initDB() {
   // ── Tabela users ─────────────────────────────────────────
   db.exec(`
@@ -70,17 +80,22 @@ function initDB() {
       name       TEXT    NOT NULL,
       avatar     TEXT    NOT NULL,
       color      TEXT    NOT NULL,
+      email      TEXT    NOT NULL DEFAULT '',
       last_login TEXT,
       last_seen  TEXT,
       is_online  INTEGER NOT NULL DEFAULT 0
     )
   `);
 
-  // Migração segura: adiciona last_seen se ainda não existir
-  const cols = db.prepare('PRAGMA table_info(users)').all();
-  if (!cols.find((c) => c.name === 'last_seen')) {
+  // Migrações seguras: adiciona colunas se não existirem
+  const userCols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+  if (!userCols.includes('last_seen')) {
     db.exec('ALTER TABLE users ADD COLUMN last_seen TEXT');
     console.log('✓ Coluna last_seen adicionada');
+  }
+  if (!userCols.includes('email')) {
+    db.exec("ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''");
+    console.log('✓ Coluna email adicionada');
   }
 
   // ── Tabela user_data ──────────────────────────────────────
@@ -108,6 +123,18 @@ function initDB() {
       message    TEXT    NOT NULL,
       created_at TEXT    NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+  `);
+
+  // ── Tabela logs ───────────────────────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS logs (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      level      TEXT    NOT NULL DEFAULT 'info',
+      message    TEXT    NOT NULL,
+      source     TEXT    NOT NULL DEFAULT 'system',
+      user_id    INTEGER,
+      created_at TEXT    NOT NULL DEFAULT (datetime('now'))
     )
   `);
 
@@ -154,7 +181,7 @@ function prepareStatements() {
   );
 
   stmts.getAllUsers = db.prepare(
-    'SELECT id, username, role, name, avatar, color, last_login, last_seen, is_online FROM users'
+    'SELECT id, username, role, name, avatar, color, email, last_login, last_seen, is_online FROM users'
   );
   stmts.getUserData = db.prepare(
     'SELECT * FROM user_data WHERE user_id = ?'
@@ -185,12 +212,23 @@ function prepareStatements() {
     JOIN users u ON u.id = f.user_id
     ORDER BY f.created_at DESC
   `);
+  stmts.getLogs = db.prepare(`
+    SELECT l.id, l.level, l.message, l.source, l.created_at,
+           u.username
+    FROM logs l
+    LEFT JOIN users u ON u.id = l.user_id
+    ORDER BY l.created_at DESC
+    LIMIT ?
+  `);
 }
 
 // ── Helpers ──────────────────────────────────────────────────
 
 function parseUserData(row) {
-  if (!row) return { tasks: [], habits: [], agenda: [], notes: [], goals: [], studyItems: [], transactions: [] };
+  if (!row) return {
+    tasks: [], habits: [], agenda: [], notes: [],
+    goals: [], studyItems: [], transactions: [], updated_at: null,
+  };
   return {
     tasks:        JSON.parse(row.tasks        || '[]'),
     habits:       JSON.parse(row.habits       || '[]'),
@@ -199,6 +237,7 @@ function parseUserData(row) {
     goals:        JSON.parse(row.goals        || '[]'),
     studyItems:   JSON.parse(row.study_items  || '[]'),
     transactions: JSON.parse(row.transactions || '[]'),
+    updated_at:   row.updated_at || null,
   };
 }
 
@@ -233,21 +272,17 @@ function adminOnly(req, res, next) {
 const app = express();
 
 // ── CORS — DEVE ser o primeiro middleware ────────────────────
-// Permite qualquer origin (Vercel, localhost, mobile)
 const corsOptions = {
-  origin: true,                     // reflete o origin do request
+  origin: true,
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: false,
 };
 
 app.use(cors(corsOptions));
-
-// Preflight: responde OPTIONS para QUALQUER rota antes de qualquer handler
-// SEM ISSO o browser recebe 405 em toda requisição cross-origin
 app.options('*', cors(corsOptions));
 
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use((req, _res, next) => {
   console.log(`${new Date().toLocaleTimeString('pt-BR')}  ${req.method} ${req.path}`);
   next();
@@ -258,7 +293,7 @@ app.use((req, _res, next) => {
 // ════════════════════════════════════════════════════════════
 
 app.get('/', (_req, res) =>
-  res.json({ name: 'LifeFlow API', status: 'ok', version: '4.0.0' })
+  res.json({ name: 'LifeFlow API', status: 'ok', version: '5.0.0' })
 );
 
 app.get('/api/health', (_req, res) =>
@@ -276,23 +311,30 @@ app.post('/api/login', async (req, res) => {
   if (typeof password !== 'string' || password.length > 128)
     return res.status(400).json({ error: 'Senha inválida.' });
 
-  const key  = username.trim().toLowerCase();
+  const key = username.trim().toLowerCase();
 
-  if (!checkRateLimit(key))
+  if (!checkRateLimit(key)) {
+    logDB('warn', `Rate limit atingido: ${key}`, 'auth');
     return res.status(429).json({ error: 'Muitas tentativas. Aguarde 15 minutos.' });
+  }
 
   const user = stmts.findByUsername.get(key);
-  if (!user)
+  if (!user) {
+    logDB('warn', `Login falhou — usuário não encontrado: ${key}`, 'auth');
     return res.status(401).json({ error: 'Usuário ou senha incorretos.' });
+  }
 
   const valid = await bcrypt.compare(password, user.password);
-  if (!valid)
+  if (!valid) {
+    logDB('warn', `Login falhou — senha incorreta: ${key}`, 'auth', user.id);
     return res.status(401).json({ error: 'Usuário ou senha incorretos.' });
+  }
 
   resetRateLimit(key);
 
   const now = new Date().toISOString();
   stmts.setOnline.run(now, now, user.id);
+  logDB('info', `Login: ${key}`, 'auth', user.id);
 
   const payload = {
     id: user.id, username: user.username, role: user.role,
@@ -309,6 +351,7 @@ app.post('/api/login', async (req, res) => {
 // ── Sessão ───────────────────────────────────────────────────
 app.post('/api/logout', auth, (req, res) => {
   stmts.setOffline.run(req.user.id);
+  logDB('info', `Logout: ${req.user.username}`, 'auth', req.user.id);
   return res.json({ ok: true });
 });
 
@@ -326,34 +369,77 @@ app.patch('/api/heartbeat', auth, (req, res) => {
 // ── Dados do usuário ─────────────────────────────────────────
 app.get('/api/data', auth, (req, res) => {
   const row = stmts.getUserData.get(req.user.id);
-  return res.json({ data: parseUserData(row) });
+  const data = parseUserData(row);
+  console.log(`[GET /api/data] user=${req.user.username} tasks=${data.tasks.length} habits=${data.habits.length} notes=${data.notes.length}`);
+  return res.json({ data });
 });
 
 app.post('/api/data', auth, (req, res) => {
   const d = req.body?.data;
-  if (!d || typeof d !== 'object' || Array.isArray(d))
+  if (!d || typeof d !== 'object' || Array.isArray(d)) {
+    logDB('error', `POST /api/data — body inválido: ${JSON.stringify(req.body).slice(0, 100)}`, 'data', req.user.id);
     return res.status(400).json({ error: 'Dados inválidos.' });
-
-  for (const f of ['tasks', 'habits', 'agenda', 'notes', 'goals', 'studyItems', 'transactions']) {
-    if (d[f] !== undefined && !Array.isArray(d[f]))
-      return res.status(400).json({ error: `Campo "${f}" deve ser array.` });
   }
 
-  stmts.upsertData.run({
+  for (const f of ['tasks', 'habits', 'agenda', 'notes', 'goals', 'studyItems', 'transactions']) {
+    if (d[f] !== undefined && !Array.isArray(d[f])) {
+      logDB('error', `POST /api/data — campo "${f}" não é array`, 'data', req.user.id);
+      return res.status(400).json({ error: `Campo "${f}" deve ser array.` });
+    }
+  }
+
+  // Busca dados atuais para não sobrescrever com arrays vazios acidentalmente
+  const current = stmts.getUserData.get(req.user.id);
+  const cur = parseUserData(current);
+
+  const toSave = {
     user_id:      req.user.id,
-    tasks:        JSON.stringify(d.tasks        ?? []),
-    habits:       JSON.stringify(d.habits       ?? []),
-    agenda:       JSON.stringify(d.agenda       ?? []),
-    notes:        JSON.stringify(d.notes        ?? []),
-    goals:        JSON.stringify(d.goals        ?? []),
-    study_items:  JSON.stringify(d.studyItems   ?? []),
-    transactions: JSON.stringify(d.transactions ?? []),
-  });
+    tasks:        JSON.stringify(d.tasks        !== undefined ? d.tasks        : cur.tasks),
+    habits:       JSON.stringify(d.habits       !== undefined ? d.habits       : cur.habits),
+    agenda:       JSON.stringify(d.agenda       !== undefined ? d.agenda       : cur.agenda),
+    notes:        JSON.stringify(d.notes        !== undefined ? d.notes        : cur.notes),
+    goals:        JSON.stringify(d.goals        !== undefined ? d.goals        : cur.goals),
+    study_items:  JSON.stringify(d.studyItems   !== undefined ? d.studyItems   : cur.studyItems),
+    transactions: JSON.stringify(d.transactions !== undefined ? d.transactions : cur.transactions),
+  };
+
+  stmts.upsertData.run(toSave);
+
+  const counts = {
+    tasks:   (d.tasks        || []).length,
+    habits:  (d.habits       || []).length,
+    notes:   (d.notes        || []).length,
+    goals:   (d.goals        || []).length,
+    agenda:  (d.agenda       || []).length,
+  };
+  console.log(`[POST /api/data] ✓ user=${req.user.username}`, counts);
 
   return res.json({ ok: true });
 });
 
-// ── Alterar senha (PATCH — padrão REST) ──────────────────────
+// ── Perfil do usuário ────────────────────────────────────────
+app.patch('/api/user/profile', auth, (req, res) => {
+  const { name, email } = req.body || {};
+
+  if (!name || typeof name !== 'string' || name.trim().length < 2)
+    return res.status(400).json({ error: 'Nome deve ter pelo menos 2 caracteres.' });
+  if (name.length > 64)
+    return res.status(400).json({ error: 'Nome muito longo (máx 64 caracteres).' });
+  if (email !== undefined && typeof email !== 'string')
+    return res.status(400).json({ error: 'Email inválido.' });
+
+  const cleanName  = name.trim();
+  const cleanEmail = (email || '').trim().slice(0, 128);
+
+  db.prepare('UPDATE users SET name = ?, email = ? WHERE id = ?')
+    .run(cleanName, cleanEmail, req.user.id);
+
+  logDB('info', `Perfil atualizado: ${req.user.username} → nome="${cleanName}"`, 'profile', req.user.id);
+
+  return res.json({ ok: true, name: cleanName, email: cleanEmail });
+});
+
+// ── Alterar senha ────────────────────────────────────────────
 app.patch('/api/change-password', auth, async (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
 
@@ -368,15 +454,19 @@ app.patch('/api/change-password', auth, async (req, res) => {
   if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
   const valid = await bcrypt.compare(currentPassword, user.password);
-  if (!valid) return res.status(401).json({ error: 'Senha atual incorreta.' });
+  if (!valid) {
+    logDB('warn', `Tentativa de troca de senha falhou: ${req.user.username}`, 'auth', req.user.id);
+    return res.status(401).json({ error: 'Senha atual incorreta.' });
+  }
 
   const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
   db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hash, req.user.id);
+  logDB('info', `Senha alterada: ${req.user.username}`, 'auth', req.user.id);
 
   return res.json({ ok: true });
 });
 
-// Alias POST para compatibilidade com código anterior
+// Alias POST para compatibilidade
 app.post('/api/change-password', auth, async (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
   if (!currentPassword || !newPassword)
@@ -407,6 +497,7 @@ app.post('/api/feedback', auth, (req, res) => {
     return res.status(400).json({ error: 'Mensagem muito longa (máx 2000 caracteres).' });
 
   stmts.insertFeedback.run(req.user.id, message.trim());
+  logDB('info', `Feedback enviado por: ${req.user.username}`, 'feedback', req.user.id);
   return res.json({ ok: true });
 });
 
@@ -414,7 +505,6 @@ app.post('/api/feedback', auth, (req, res) => {
 //  ROTAS ADMIN
 // ════════════════════════════════════════════════════════════
 
-// ── Lista de usuários ────────────────────────────────────────
 app.get('/api/users', auth, adminOnly, (_req, res) => {
   const users = stmts.getAllUsers.all().map((u) => ({
     ...u,
@@ -423,7 +513,6 @@ app.get('/api/users', auth, adminOnly, (_req, res) => {
   return res.json({ users });
 });
 
-// ── Atividade dos usuários ───────────────────────────────────
 app.get('/api/admin/activity', auth, adminOnly, (_req, res) => {
   const users = stmts.getAllUsers.all().map((u) => ({
     id:         u.id,
@@ -439,13 +528,19 @@ app.get('/api/admin/activity', auth, adminOnly, (_req, res) => {
   return res.json({ users });
 });
 
-// ── Feedbacks (lista para admin) ─────────────────────────────
 app.get('/api/feedbacks', auth, adminOnly, (_req, res) => {
   const feedbacks = stmts.getAllFeedbacks.all();
   return res.json({ feedbacks });
 });
 
-// ── Reset de senha (admin — sem precisar da senha atual) ──────
+// ── Logs do sistema (admin) ───────────────────────────────────
+app.get('/api/logs', auth, adminOnly, (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+  const logs  = stmts.getLogs.all(limit);
+  return res.json({ logs });
+});
+
+// ── Reset de senha (admin) ────────────────────────────────────
 app.patch('/api/reset-password', auth, adminOnly, async (req, res) => {
   const { username, newPassword } = req.body || {};
 
@@ -459,6 +554,7 @@ app.patch('/api/reset-password', auth, adminOnly, async (req, res) => {
 
   const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
   db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hash, user.id);
+  logDB('warn', `Senha resetada pelo admin para: ${username}`, 'admin', req.user.id);
 
   return res.json({ ok: true });
 });
@@ -472,6 +568,7 @@ app.use((_req, res) => res.status(404).json({ error: 'Rota não encontrada.' }))
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
   console.error('[ERROR]', err.message || err);
+  logDB('error', err.message || 'Erro interno desconhecido', 'system');
   const status = err.status || err.statusCode || 500;
   res.status(status).json({ error: err.message || 'Erro interno do servidor.' });
 });
@@ -485,7 +582,7 @@ prepareStatements();
 
 app.listen(PORT, () => {
   console.log('');
-  console.log('🚀 LifeFlow Backend v4');
+  console.log('🚀 LifeFlow Backend v5');
   console.log(`   http://localhost:${PORT}`);
   console.log('');
   console.log('📋 Endpoints:');
@@ -495,11 +592,13 @@ app.listen(PORT, () => {
   console.log('   PATCH  /api/heartbeat');
   console.log('   GET    /api/data');
   console.log('   POST   /api/data');
+  console.log('   PATCH  /api/user/profile');
   console.log('   PATCH  /api/change-password');
   console.log('   POST   /api/feedback');
   console.log('   GET    /api/users           (admin)');
   console.log('   GET    /api/admin/activity  (admin)');
   console.log('   GET    /api/feedbacks       (admin)');
+  console.log('   GET    /api/logs            (admin)');
   console.log('   PATCH  /api/reset-password  (admin)');
   console.log('');
   console.log('👤 Usuários seed:');

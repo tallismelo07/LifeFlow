@@ -7,7 +7,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { changePasswordRequest } from '../../services/authService';
 import {
   Menu, Search, LogOut, Shield, Sun, Moon,
-  KeyRound, Eye, EyeOff, X, CheckCircle2, Loader2,
+  KeyRound, Eye, EyeOff, X, CheckCircle2, Loader2, User, Save,
 } from 'lucide-react';
 
 const TITLES = {
@@ -25,176 +25,253 @@ const TITLES = {
   feedback:  { title: 'Sugestões',        sub: 'Envie ideias e feedback' },
 };
 
-// ── Modal alterar senha ──────────────────────────────────────────────────────
+// ── Modal Minha Conta (perfil + alterar senha) ───────────────────────────────
 
-function ChangePasswordModal({ onClose }) {
+function AccountModal({ onClose }) {
+  const { currentUser, updateProfile } = useAuth();
+  const [tab, setTab] = useState('profile'); // 'profile' | 'password'
+
+  // Perfil
+  const [name,       setName]       = useState(currentUser?.name || '');
+  const [savingProf, setSavingProf] = useState(false);
+  const [profErr,    setProfErr]    = useState('');
+  const [profOk,     setProfOk]     = useState(false);
+
+  // Senha
   const [current,  setCurrent]  = useState('');
   const [next,     setNext]     = useState('');
   const [confirm,  setConfirm]  = useState('');
   const [showCur,  setShowCur]  = useState(false);
   const [showNew,  setShowNew]  = useState(false);
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState('');
-  const [success,  setSuccess]  = useState(false);
+  const [savingPwd, setSavingPwd] = useState(false);
+  const [pwdErr,   setPwdErr]   = useState('');
+  const [pwdOk,    setPwdOk]    = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleProfileSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    if (!current || !next || !confirm) { setError('Preencha todos os campos.'); return; }
-    if (next.length < 3) { setError('Nova senha deve ter pelo menos 3 caracteres.'); return; }
-    if (next !== confirm) { setError('As senhas não coincidem.'); return; }
+    setProfErr('');
+    if (!name.trim() || name.trim().length < 2) {
+      setProfErr('Nome deve ter pelo menos 2 caracteres.');
+      return;
+    }
+    setSavingProf(true);
+    try {
+      await updateProfile(name.trim(), '');
+      setProfOk(true);
+      setTimeout(() => setProfOk(false), 2000);
+    } catch (err) {
+      setProfErr(err?.response?.data?.error || 'Erro ao salvar perfil.');
+    } finally {
+      setSavingProf(false);
+    }
+  };
 
-    setLoading(true);
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    setPwdErr('');
+    if (!current || !next || !confirm) { setPwdErr('Preencha todos os campos.'); return; }
+    if (next.length < 3) { setPwdErr('Nova senha deve ter pelo menos 3 caracteres.'); return; }
+    if (next !== confirm) { setPwdErr('As senhas não coincidem.'); return; }
+    setSavingPwd(true);
     try {
       await changePasswordRequest(current, next);
-      setSuccess(true);
+      setPwdOk(true);
       setTimeout(onClose, 1600);
     } catch (err) {
-      setError(err?.response?.data?.error || 'Erro ao alterar senha.');
+      setPwdErr(err?.response?.data?.error || 'Erro ao alterar senha.');
     } finally {
-      setLoading(false);
+      setSavingPwd(false);
     }
   };
 
   return (
     <>
-      {/* Backdrop */}
       <motion.div
         className="fixed inset-0 z-[60]"
         style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         onClick={onClose}
       />
-
-      {/* Modal */}
       <motion.div
         className="fixed z-[70] left-1/2 top-1/2"
-        style={{ translateX: '-50%', translateY: '-50%', width: '100%', maxWidth: 380, padding: '0 16px' }}
+        style={{ translateX: '-50%', translateY: '-50%', width: '100%', maxWidth: 400, padding: '0 16px' }}
         initial={{ opacity: 0, scale: 0.94, y: 12 }}
         animate={{ opacity: 1, scale: 1,    y: 0  }}
         exit={{    opacity: 0, scale: 0.94, y: 12 }}
         transition={{ type: 'spring', stiffness: 320, damping: 28 }}
       >
-        <div
-          className="rounded-2xl p-6"
-          style={{ background: 'var(--bg-soft)', border: '1px solid var(--border-md)', boxShadow: 'var(--shadow-lg)' }}
-        >
+        <div className="rounded-2xl p-6"
+          style={{ background: 'var(--bg-soft)', border: '1px solid var(--border-md)', boxShadow: 'var(--shadow-lg)' }}>
+
           {/* Header */}
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                style={{ background: 'var(--blue-bg)', border: '1px solid var(--blue-border)' }}>
-                <KeyRound size={15} style={{ color: 'var(--blue)' }} />
-              </div>
-              <h2 className="font-bold text-base" style={{ color: 'var(--text)' }}>Alterar Senha</h2>
-            </div>
-            <motion.button
-              onClick={onClose}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-bold text-base" style={{ color: 'var(--text)' }}>Minha Conta</h2>
+            <motion.button onClick={onClose}
               whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
               className="p-1.5 rounded-xl"
-              style={{ background: 'var(--bg-muted)', color: 'var(--text-3)' }}
-            >
+              style={{ background: 'var(--bg-muted)', color: 'var(--text-3)' }}>
               <X size={15} />
             </motion.button>
           </div>
 
-          {success ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="flex flex-col items-center gap-3 py-4"
-            >
-              <CheckCircle2 size={36} style={{ color: 'var(--green)' }} />
-              <p className="font-semibold text-sm" style={{ color: 'var(--text)' }}>Senha alterada com sucesso!</p>
-            </motion.div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-3">
-              {/* Senha atual */}
-              <div>
-                <label className="label block mb-1.5">SENHA ATUAL</label>
-                <div className="relative">
-                  <input
-                    type={showCur ? 'text' : 'password'}
-                    placeholder="••••••"
-                    value={current}
-                    onChange={(e) => { setCurrent(e.target.value); setError(''); }}
-                    className="input-base pr-10"
-                    autoFocus
-                    disabled={loading}
-                  />
-                  <button type="button" tabIndex={-1}
-                    onClick={() => setShowCur((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2"
-                    style={{ color: 'var(--text-4)' }}
-                  >
-                    {showCur ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-              </div>
+          {/* Tab bar */}
+          <div className="flex gap-1 p-1 rounded-xl mb-5"
+            style={{ background: 'var(--bg-muted)', border: '1px solid var(--border)' }}>
+            {[
+              { id: 'profile',  label: 'Perfil',  Icon: User },
+              { id: 'password', label: 'Senha',   Icon: KeyRound },
+            ].map(({ id, label, Icon }) => (
+              <button key={id}
+                onClick={() => setTab(id)}
+                className="flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg text-sm font-medium transition-all"
+                style={tab === id
+                  ? { background: 'var(--blue)', color: 'var(--on-blue)' }
+                  : { color: 'var(--text-3)' }}>
+                <Icon size={13} />
+                {label}
+              </button>
+            ))}
+          </div>
 
-              {/* Nova senha */}
+          {/* Aba: Perfil */}
+          {tab === 'profile' && (
+            <form onSubmit={handleProfileSubmit} className="space-y-3">
               <div>
-                <label className="label block mb-1.5">NOVA SENHA</label>
-                <div className="relative">
-                  <input
-                    type={showNew ? 'text' : 'password'}
-                    placeholder="mínimo 3 caracteres"
-                    value={next}
-                    onChange={(e) => { setNext(e.target.value); setError(''); }}
-                    className="input-base pr-10"
-                    disabled={loading}
-                  />
-                  <button type="button" tabIndex={-1}
-                    onClick={() => setShowNew((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2"
-                    style={{ color: 'var(--text-4)' }}
-                  >
-                    {showNew ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Confirmar */}
-              <div>
-                <label className="label block mb-1.5">CONFIRMAR NOVA SENHA</label>
+                <label className="label block mb-1.5">SEU NOME</label>
                 <input
-                  type="password"
-                  placeholder="••••••"
-                  value={confirm}
-                  onChange={(e) => { setConfirm(e.target.value); setError(''); }}
+                  type="text"
+                  placeholder="Como você quer ser chamado?"
+                  value={name}
+                  onChange={(e) => { setName(e.target.value); setProfErr(''); }}
                   className="input-base"
-                  disabled={loading}
+                  disabled={savingProf}
+                  maxLength={64}
+                  autoFocus
                 />
               </div>
 
-              {/* Erro */}
               <AnimatePresence>
-                {error && (
-                  <motion.p
-                    initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                {profErr && (
+                  <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                     className="text-xs rounded-lg px-3 py-2"
-                    style={{ background: 'var(--red-bg)', color: 'var(--red)', border: '1px solid var(--red-border)' }}
-                  >
-                    {error}
+                    style={{ background: 'var(--red-bg)', color: 'var(--red)', border: '1px solid var(--red-border)' }}>
+                    {profErr}
                   </motion.p>
                 )}
               </AnimatePresence>
 
-              {/* Botões */}
               <div className="flex gap-2 pt-1">
-                <button type="button" onClick={onClose} className="btn-ghost flex-1" disabled={loading}>
+                <button type="button" onClick={onClose} className="btn-ghost flex-1" disabled={savingProf}>
                   Cancelar
                 </button>
                 <motion.button
                   type="submit"
                   className="btn-primary flex-1 flex items-center justify-center gap-2"
-                  disabled={loading}
-                  whileTap={loading ? {} : { scale: 0.97 }}
+                  disabled={savingProf}
+                  whileTap={savingProf ? {} : { scale: 0.97 }}
                 >
-                  {loading ? <><Loader2 size={14} className="animate-spin" /> Salvando...</> : 'Salvar'}
+                  {savingProf ? (
+                    <><Loader2 size={14} className="animate-spin" /> Salvando...</>
+                  ) : profOk ? (
+                    <><CheckCircle2 size={14} /> Salvo!</>
+                  ) : (
+                    <><Save size={14} /> Salvar</>
+                  )}
                 </motion.button>
               </div>
             </form>
+          )}
+
+          {/* Aba: Senha */}
+          {tab === 'password' && (
+            <>
+              {pwdOk ? (
+                <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+                  className="flex flex-col items-center gap-3 py-4">
+                  <CheckCircle2 size={36} style={{ color: 'var(--green)' }} />
+                  <p className="font-semibold text-sm" style={{ color: 'var(--text)' }}>Senha alterada com sucesso!</p>
+                </motion.div>
+              ) : (
+                <form onSubmit={handlePasswordSubmit} className="space-y-3">
+                  <div>
+                    <label className="label block mb-1.5">SENHA ATUAL</label>
+                    <div className="relative">
+                      <input
+                        type={showCur ? 'text' : 'password'}
+                        placeholder="••••••"
+                        value={current}
+                        onChange={(e) => { setCurrent(e.target.value); setPwdErr(''); }}
+                        className="input-base pr-10"
+                        autoFocus
+                        disabled={savingPwd}
+                      />
+                      <button type="button" tabIndex={-1}
+                        onClick={() => setShowCur((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2"
+                        style={{ color: 'var(--text-4)' }}>
+                        {showCur ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="label block mb-1.5">NOVA SENHA</label>
+                    <div className="relative">
+                      <input
+                        type={showNew ? 'text' : 'password'}
+                        placeholder="mínimo 3 caracteres"
+                        value={next}
+                        onChange={(e) => { setNext(e.target.value); setPwdErr(''); }}
+                        className="input-base pr-10"
+                        disabled={savingPwd}
+                      />
+                      <button type="button" tabIndex={-1}
+                        onClick={() => setShowNew((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2"
+                        style={{ color: 'var(--text-4)' }}>
+                        {showNew ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="label block mb-1.5">CONFIRMAR NOVA SENHA</label>
+                    <input
+                      type="password"
+                      placeholder="••••••"
+                      value={confirm}
+                      onChange={(e) => { setConfirm(e.target.value); setPwdErr(''); }}
+                      className="input-base"
+                      disabled={savingPwd}
+                    />
+                  </div>
+
+                  <AnimatePresence>
+                    {pwdErr && (
+                      <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                        className="text-xs rounded-lg px-3 py-2"
+                        style={{ background: 'var(--red-bg)', color: 'var(--red)', border: '1px solid var(--red-border)' }}>
+                        {pwdErr}
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+
+                  <div className="flex gap-2 pt-1">
+                    <button type="button" onClick={onClose} className="btn-ghost flex-1" disabled={savingPwd}>
+                      Cancelar
+                    </button>
+                    <motion.button
+                      type="submit"
+                      className="btn-primary flex-1 flex items-center justify-center gap-2"
+                      disabled={savingPwd}
+                      whileTap={savingPwd ? {} : { scale: 0.97 }}
+                    >
+                      {savingPwd ? <><Loader2 size={14} className="animate-spin" /> Salvando...</> : 'Salvar'}
+                    </motion.button>
+                  </div>
+                </form>
+              )}
+            </>
           )}
         </div>
       </motion.div>
@@ -211,7 +288,7 @@ export default function Header({ onOpenCmd }) {
   const { title, sub } = TITLES[activeTab] || TITLES.dashboard;
   const isAdmin = currentUser?.role === 'admin';
 
-  const [pwdOpen, setPwdOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   return (
     <>
@@ -251,17 +328,14 @@ export default function Header({ onOpenCmd }) {
         {/* Right: controls */}
         <div className="flex items-center gap-2">
 
-          {/* User badge — clicável para abrir modal de senha */}
+          {/* User badge — clicável para abrir modal de conta */}
           {currentUser && (
             <motion.button
-              onClick={() => setPwdOpen(true)}
+              onClick={() => setAccountOpen(true)}
               whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
               className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl transition-colors"
-              style={{
-                background: 'var(--blue-bg)',
-                border: '1px solid var(--blue-border)',
-              }}
-              title="Alterar senha"
+              style={{ background: 'var(--blue-bg)', border: '1px solid var(--blue-border)' }}
+              title="Minha conta"
             >
               <div
                 className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
@@ -315,14 +389,14 @@ export default function Header({ onOpenCmd }) {
             </kbd>
           </motion.button>
 
-          {/* Alterar senha — mobile (só ícone) */}
+          {/* Minha conta — mobile (só ícone) */}
           {currentUser && (
             <motion.button
-              onClick={() => setPwdOpen(true)}
+              onClick={() => setAccountOpen(true)}
               whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.9 }}
               className="sm:hidden p-2 rounded-xl transition-colors"
               style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)' }}
-              title="Alterar senha"
+              title="Minha conta"
             >
               <KeyRound size={16} />
             </motion.button>
@@ -341,9 +415,9 @@ export default function Header({ onOpenCmd }) {
         </div>
       </header>
 
-      {/* Modal alterar senha */}
+      {/* Modal minha conta */}
       <AnimatePresence>
-        {pwdOpen && <ChangePasswordModal onClose={() => setPwdOpen(false)} />}
+        {accountOpen && <AccountModal onClose={() => setAccountOpen(false)} />}
       </AnimatePresence>
     </>
   );
