@@ -1,7 +1,7 @@
 // src/context/AuthContext.jsx
 
-import { createContext, useContext, useState, useEffect } from 'react';
-import { loginRequest, logoutRequest, meRequest, heartbeatRequest } from '../services/authService';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { loginRequest, logoutRequest, meRequest, heartbeatRequest, activityUsersRequest } from '../services/authService';
 
 const AuthContext = createContext(null);
 
@@ -12,7 +12,15 @@ export function AuthProvider({ children }) {
       return saved ? JSON.parse(saved) : null;
     } catch { return null; }
   });
-  const [loading, setLoading] = useState(true);
+  const [loading,        setLoading]        = useState(true);
+  const [activityUsers,  setActivityUsers]  = useState([]);
+
+  const fetchActivityUsers = useCallback(async () => {
+    try {
+      const users = await activityUsersRequest();
+      setActivityUsers(users);
+    } catch { /* silencioso — apenas admin tem acesso */ }
+  }, []);
 
   // Verifica token no backend ao iniciar
   useEffect(() => {
@@ -68,8 +76,10 @@ export function AuthProvider({ children }) {
     setCurrentUser(null);
   };
 
+  const isAdmin = currentUser?.role === 'admin';
+
   return (
-    <AuthContext.Provider value={{ currentUser, loading, login, logout }}>
+    <AuthContext.Provider value={{ currentUser, loading, login, logout, isAdmin, activityUsers, fetchActivityUsers }}>
       {children}
     </AuthContext.Provider>
   );

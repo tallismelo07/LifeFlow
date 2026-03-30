@@ -326,10 +326,15 @@ html.light {
 .hover\:bg-white\/8:hover  { background-color: var(--bg-muted); }
 .hover\:bg-white\/10:hover { background-color: var(--bg-raised); }
 
+/* ── Utilitário ink: texto escuro fixo (para uso sobre bg colorido) ── */
+.text-ink { color: #212529 !important; }
+
 /* Accent colours */
 .accent-lime              { color: var(--green); }
 .text-accent-lime         { color: var(--green); }
 .bg-accent-lime           { background-color: var(--green); }
+.bg-accent-teal           { background-color: var(--teal); }
+.bg-accent-rose           { background-color: var(--red); }
 .bg-accent-lime\/10       { background-color: var(--green-bg); }
 .bg-accent-lime\/15       { background-color: var(--green-bg); }
 .border-accent-lime\/20   { border-color: var(--green-border); }

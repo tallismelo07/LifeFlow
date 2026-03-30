@@ -87,7 +87,7 @@ export default function AdminPanel() {
               const online = !!u.is_online;
               return (
                 <div key={u.id} className="flex items-center gap-4 px-5 py-4 hover:bg-white/3 transition-colors">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-ink text-sm shrink-0"
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm shrink-0"
                     style={{ backgroundColor: u.color || '#6B7280' }}>
                     {u.avatar || u.name?.[0]?.toUpperCase() || '?'}
                   </div>
