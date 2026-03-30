@@ -1,30 +1,32 @@
 // src/components/layout/BottomNav.jsx
+// Tab bar uniforme — sem FAB central, todos os botões com o mesmo formato
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp  } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import {
-  Wallet, Flame, LayoutDashboard, CheckSquare,
-  Target, Shield, Lightbulb, MoreHorizontal, CalendarCheck,
+  LayoutDashboard, Wallet, Flame,
+  CheckSquare, Target, Shield, Lightbulb,
+  MoreHorizontal, CalendarCheck,
 } from 'lucide-react';
 
-// Navegação principal inspirada no design de referência:
-// Finanças · Rotina · [FAB Atlas] · Trilha · Metas · Menu
-const LEFT_ITEMS = [
-  { id: 'finance', label: 'Finanças', icon: Wallet },
-  { id: 'habits',  label: 'Rotina',   icon: Flame  },
+// Os 5 itens fixos da tab bar (todos com o mesmo estilo)
+const NAV_ITEMS = [
+  { id: 'dashboard', label: 'Atlas',    icon: LayoutDashboard },
+  { id: 'finance',   label: 'Finanças', icon: Wallet          },
+  { id: 'habits',    label: 'Rotina',   icon: Flame           },
+  { id: 'tasks',     label: 'Trilha',   icon: CheckSquare     },
+  { id: 'goals',     label: 'Metas',    icon: Target          },
 ];
-const RIGHT_ITEMS = [
-  { id: 'tasks',  label: 'Trilha', icon: CheckSquare },
-  { id: 'goals',  label: 'Metas',  icon: Target      },
-];
+
 const MORE_BASE = [
   { id: 'agenda',  label: 'Agenda',  icon: CalendarCheck },
   { id: 'weekly',  label: 'Revisão', icon: CalendarCheck },
 ];
 
-function NavBtn({ item, active, badge, onClick }) {
+// ── Botão de tab uniforme ──────────────────────────────────────────────────────
+function TabBtn({ item, active, badge, onClick }) {
   const Icon = item.icon;
   return (
     <button
@@ -32,36 +34,44 @@ function NavBtn({ item, active, badge, onClick }) {
       onClick={onClick}
       className="flex-1 flex flex-col items-center justify-center gap-[3px] relative"
       style={{
-        minHeight: 60,
+        minHeight: 58,
         color: active ? 'var(--text)' : 'var(--text-4)',
         transition: 'color 0.15s',
         WebkitTapHighlightColor: 'transparent',
       }}
     >
+      {/* Indicador superior */}
       {active && (
         <motion.div
-          layoutId="bottom-indicator"
+          layoutId="tab-indicator"
           className="absolute top-0 rounded-full"
-          style={{ height: 2, width: 28, background: 'var(--text-2)' }}
-          transition={{ type: 'spring', stiffness: 500, damping: 34 }}
+          style={{ height: 2, width: 24, background: 'var(--text-2)' }}
+          transition={{ type: 'spring', stiffness: 500, damping: 36 }}
         />
       )}
+
+      {/* Ícone */}
       <motion.div
         className="relative"
-        animate={{ scale: active ? 1.15 : 1 }}
+        animate={{ scale: active ? 1.12 : 1 }}
         transition={{ type: 'spring', stiffness: 420, damping: 22 }}
       >
-        <Icon size={20} strokeWidth={active ? 2.3 : 1.6} />
+        <Icon size={19} strokeWidth={active ? 2.2 : 1.6} />
         {badge != null && (
           <span
-            className="absolute -top-1 -right-1.5 min-w-[14px] h-[14px] rounded-full flex items-center justify-center text-[9px] font-bold text-white px-0.5"
+            className="absolute -top-1 -right-1.5 min-w-[13px] h-[13px] rounded-full flex items-center justify-center text-[9px] font-bold text-white px-0.5"
             style={{ background: 'var(--red)', lineHeight: 1 }}
           >
             {badge > 9 ? '9+' : badge}
           </span>
         )}
       </motion.div>
-      <span className="text-[9px] font-medium leading-none uppercase" style={{ letterSpacing: '0.04em' }}>
+
+      {/* Label */}
+      <span
+        className="text-[9px] font-medium leading-none uppercase"
+        style={{ letterSpacing: '0.04em' }}
+      >
         {item.label}
       </span>
     </button>
@@ -71,7 +81,7 @@ function NavBtn({ item, active, badge, onClick }) {
 export default function BottomNav() {
   const { activeTab, setActiveTab, tasks, habits } = useApp();
   const { currentUser } = useAuth();
-  const isAdmin   = currentUser?.role === 'admin';
+  const isAdmin  = currentUser?.role === 'admin';
   const [moreOpen, setMoreOpen] = useState(false);
 
   const todayStr     = new Date().toISOString().split('T')[0];
@@ -84,71 +94,24 @@ export default function BottomNav() {
     : [...MORE_BASE, { id: 'feedback', label: 'Sugestões', icon: Lightbulb }];
 
   const isMoreActive = allMore.some((i) => i.id === activeTab);
-  const homeActive   = activeTab === 'dashboard';
 
   const goTo = (id) => { setActiveTab(id); setMoreOpen(false); };
 
   return (
     <>
+      {/* ── Tab bar ────────────────────────────────────────────── */}
       <nav
         className="lg:hidden fixed left-0 right-0 bottom-0 z-30 flex"
         style={{
           background:    'var(--sidebar-bg)',
           borderTop:     '1px solid var(--border-md)',
-          boxShadow:     '0 -6px 28px rgba(0,0,0,0.45)',
+          boxShadow:     '0 -4px 24px rgba(0,0,0,0.40)',
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-          height:        60,
-          overflow:      'visible',
+          height:        58,
         }}
       >
-        {LEFT_ITEMS.map((item) => (
-          <NavBtn
-            key={item.id}
-            item={item}
-            active={activeTab === item.id}
-            badge={badges[item.id]}
-            onClick={() => goTo(item.id)}
-          />
-        ))}
-
-        {/* FAB central — Dashboard (Atlas) */}
-        <div style={{ flex: '1 1 0%', position: 'relative', overflow: 'visible' }}>
-          <motion.button
-            type="button"
-            onClick={() => goTo('dashboard')}
-            style={{
-              position:  'absolute',
-              left:      '50%',
-              bottom:    10,
-              transform: 'translateX(-50%)',
-              width:  52,
-              height: 52,
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1,
-              WebkitTapHighlightColor: 'transparent',
-              background: homeActive ? 'var(--blue)' : 'var(--bg-raised)',
-              boxShadow: homeActive
-                ? '0 0 0 3px var(--blue-border), 0 4px 18px rgba(0,0,0,0.45)'
-                : '0 2px 10px rgba(0,0,0,0.50)',
-              border: homeActive
-                ? '2px solid var(--blue-border)'
-                : '2px solid var(--border-md)',
-              color: homeActive ? 'var(--on-blue)' : 'var(--text-4)',
-            }}
-            animate={{ scale: homeActive ? 1.06 : 1 }}
-            whileHover={{ scale: 1.10 }}
-            whileTap={{ scale: 0.92 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-          >
-            <LayoutDashboard size={22} strokeWidth={homeActive ? 2.2 : 1.7} />
-          </motion.button>
-        </div>
-
-        {RIGHT_ITEMS.map((item) => (
-          <NavBtn
+        {NAV_ITEMS.map((item) => (
+          <TabBtn
             key={item.id}
             item={item}
             active={activeTab === item.id}
@@ -163,7 +126,7 @@ export default function BottomNav() {
           onClick={() => setMoreOpen((o) => !o)}
           className="flex-1 flex flex-col items-center justify-center gap-[3px] relative"
           style={{
-            minHeight: 60,
+            minHeight: 58,
             color: isMoreActive || moreOpen ? 'var(--text)' : 'var(--text-4)',
             transition: 'color 0.15s',
             WebkitTapHighlightColor: 'transparent',
@@ -171,17 +134,17 @@ export default function BottomNav() {
         >
           {(isMoreActive && !moreOpen) && (
             <motion.div
-              layoutId="bottom-indicator"
+              layoutId="tab-indicator"
               className="absolute top-0 rounded-full"
-              style={{ height: 2, width: 28, background: 'var(--text-2)' }}
-              transition={{ type: 'spring', stiffness: 500, damping: 34 }}
+              style={{ height: 2, width: 24, background: 'var(--text-2)' }}
+              transition={{ type: 'spring', stiffness: 500, damping: 36 }}
             />
           )}
           <motion.div
             animate={{ rotate: moreOpen ? 90 : 0 }}
             transition={{ type: 'spring', stiffness: 350, damping: 22 }}
           >
-            <MoreHorizontal size={20} strokeWidth={1.6} />
+            <MoreHorizontal size={19} strokeWidth={1.6} />
           </motion.div>
           <span className="text-[9px] font-medium leading-none uppercase" style={{ letterSpacing: '0.04em' }}>
             Menu
@@ -189,16 +152,16 @@ export default function BottomNav() {
         </button>
       </nav>
 
-      {/* Sheet "Menu" */}
+      {/* ── Sheet "Menu" ──────────────────────────────────────── */}
       <AnimatePresence>
         {moreOpen && (
           <>
             <motion.div
               key="backdrop"
               className="lg:hidden fixed inset-0 z-[40]"
-              style={{ background: 'rgba(0,0,0,0.65)' }}
+              style={{ background: 'rgba(0,0,0,0.60)' }}
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              transition={{ duration: 0.20 }}
+              transition={{ duration: 0.18 }}
               onClick={() => setMoreOpen(false)}
             />
             <motion.div
@@ -209,14 +172,15 @@ export default function BottomNav() {
                 background:    'var(--bg-soft)',
                 borderTop:     '1px solid var(--border-md)',
                 boxShadow:     '0 -12px 44px rgba(0,0,0,0.55)',
-                paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 68px)',
+                paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 66px)',
               }}
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             >
-              <div className="mx-auto mt-3 mb-5 rounded-full"
-                style={{ width: 36, height: 3, background: 'var(--border-strong)' }} />
-
+              <div
+                className="mx-auto mt-3 mb-5 rounded-full"
+                style={{ width: 36, height: 3, background: 'var(--border-strong)' }}
+              />
               <div className="px-5 pb-2">
                 <p className="label mb-4">MAIS SEÇÕES</p>
                 <div className="grid grid-cols-3 gap-3">
@@ -230,14 +194,14 @@ export default function BottomNav() {
                         onClick={() => goTo(item.id)}
                         className="flex flex-col items-center justify-center gap-2.5 py-4 rounded-2xl transition-colors"
                         style={{
-                          background: active ? 'var(--blue)'   : 'var(--bg-muted)',
-                          color:      active ? 'var(--on-blue)': 'var(--text-3)',
-                          border:     '1px solid ' + (active ? 'var(--blue-border)' : 'var(--border)'),
+                          background: active ? 'var(--blue)'    : 'var(--bg-muted)',
+                          color:      active ? 'var(--on-blue)' : 'var(--text-3)',
+                          border:     `1px solid ${active ? 'var(--blue-border)' : 'var(--border)'}`,
                           WebkitTapHighlightColor: 'transparent',
                         }}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.035, duration: 0.20 }}
+                        transition={{ delay: i * 0.03, duration: 0.18 }}
                         whileTap={{ scale: 0.93 }}
                       >
                         <Icon size={22} strokeWidth={active ? 2.2 : 1.7} />

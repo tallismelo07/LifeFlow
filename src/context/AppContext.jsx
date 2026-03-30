@@ -76,11 +76,9 @@ export function AppProvider({ children }) {
   const username = currentUser?.username;
 
   // Estado principal — inicializado do localStorage para UI instantânea
-  const [data,      setData]      = useState(() => loadLocal(username));
-  const [syncing,   setSyncing]   = useState(false);
-  const [saveErr,   setSaveErr]   = useState(false);
-  const [saving,    setSaving]    = useState(false);
-  const [lastSaved, setLastSaved] = useState(null);
+  const [data,    setData]    = useState(() => loadLocal(username));
+  const [syncing, setSyncing] = useState(false);
+  const [saveErr, setSaveErr] = useState(false);
 
   // ── Refs de controle de ciclo ─────────────────────────────
   const dataRef          = useRef(data);   // sempre aponta para o data mais recente
@@ -287,15 +285,14 @@ export function AppProvider({ children }) {
       const snapshot = dataRef.current; // captura o estado atual no momento do disparo
       console.log(`[AppContext] Salvando ${countItems(snapshot)} itens no servidor...`);
 
-      setSaving(true);
+      document.dispatchEvent(new CustomEvent('lf:save-start'));
       const { ok } = await saveWithRetry(snapshot);
-      setSaving(false);
+      document.dispatchEvent(new CustomEvent('lf:save-done', { detail: { ok } }));
       setSaveErr(!ok);
 
       if (ok) {
         pendingChanges.current = false;
         lastServerTs.current   = new Date().toISOString();
-        setLastSaved(new Date());
       }
     }, 400);
 
@@ -419,8 +416,6 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       syncing,
       saveErr,
-      saving,
-      lastSaved,
       tasks,        addTask,    updateTask, deleteTask, toggleTask,
       habits,       addHabit,  deleteHabit, toggleHabit,
       transactions, totalIncome, totalExpense, balance, addTransaction, deleteTransaction,

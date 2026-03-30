@@ -6,51 +6,62 @@ import { useAuth } from './context/AuthContext';
 import { AppProvider, useApp } from './context/AppContext';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 
-// ── Toast de salvamento — fixo no canto inferior direito ──────────────────────
-// Renderizado dentro do AppProvider mas fora do layout principal,
-// garantindo que nunca cause reflow ou flickering nos menus.
+// ── Toast de salvamento ───────────────────────────────────────────────────────
+// Usa eventos DOM customizados (lf:save-start / lf:save-done) em vez de
+// estado React do AppContext. Desta forma, ZERO componente de navegação
+// re-renderiza durante o salvamento — sem flickering, sem pisca.
 function SaveToast() {
-  const { saving, lastSaved } = useApp();
-  const [showSaved, setShowSaved] = useState(false);
+  const [status, setStatus] = useState(null); // null | 'saving' | 'saved'
 
   useEffect(() => {
-    if (!lastSaved) return;
-    setShowSaved(true);
-    const t = setTimeout(() => setShowSaved(false), 2000);
-    return () => clearTimeout(t);
-  }, [lastSaved]);
+    let hideTimer = null;
 
-  const visible = saving || showSaved;
+    const onStart = () => {
+      clearTimeout(hideTimer);
+      setStatus('saving');
+    };
+    const onDone = (e) => {
+      clearTimeout(hideTimer);
+      if (e.detail?.ok) {
+        setStatus('saved');
+        hideTimer = setTimeout(() => setStatus(null), 1800);
+      } else {
+        setStatus(null);
+      }
+    };
+
+    document.addEventListener('lf:save-start', onStart);
+    document.addEventListener('lf:save-done',  onDone);
+    return () => {
+      document.removeEventListener('lf:save-start', onStart);
+      document.removeEventListener('lf:save-done',  onDone);
+      clearTimeout(hideTimer);
+    };
+  }, []);
 
   return (
     <div
       className="fixed z-[200] pointer-events-none"
-      style={{
-        right: 20,
-        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)',
-      }}
+      style={{ right: 16, bottom: 'calc(env(safe-area-inset-bottom, 0px) + 76px)' }}
     >
       <AnimatePresence>
-        {visible && (
+        {status && (
           <motion.div
-            initial={{ opacity: 0, y: 8, scale: 0.92 }}
-            animate={{ opacity: 1, y: 0,  scale: 1    }}
-            exit={{   opacity: 0, y: 4,   scale: 0.94 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
+            key={status}
+            initial={{ opacity: 0, y: 6, scale: 0.92 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{   opacity: 0, y: 4, scale: 0.94 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
             className="flex items-center gap-2 text-xs font-medium px-3.5 py-2.5 rounded-2xl"
             style={{
-              background: saving
-                ? 'var(--bg-raised)'
-                : 'var(--green-bg)',
-              color: saving ? 'var(--text-3)' : 'var(--green)',
-              border: saving
-                ? '1px solid var(--border-md)'
-                : '1px solid var(--green-border)',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+              background:  status === 'saving' ? 'var(--bg-raised)' : 'var(--green-bg)',
+              color:       status === 'saving' ? 'var(--text-3)'    : 'var(--green)',
+              border:      status === 'saving' ? '1px solid var(--border-md)' : '1px solid var(--green-border)',
+              boxShadow:   '0 4px 16px rgba(0,0,0,0.35)',
             }}
           >
-            {saving
-              ? <><Loader2 size={12} className="animate-spin" /> Salvando...</>
+            {status === 'saving'
+              ? <><Loader2 size={12} className="animate-spin" /> Salvando</>
               : <><CheckCircle2 size={12} /> Salvo</>
             }
           </motion.div>
