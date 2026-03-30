@@ -4,6 +4,61 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from './context/AuthContext';
 import { AppProvider, useApp } from './context/AppContext';
+import { Loader2, CheckCircle2 } from 'lucide-react';
+
+// ── Toast de salvamento — fixo no canto inferior direito ──────────────────────
+// Renderizado dentro do AppProvider mas fora do layout principal,
+// garantindo que nunca cause reflow ou flickering nos menus.
+function SaveToast() {
+  const { saving, lastSaved } = useApp();
+  const [showSaved, setShowSaved] = useState(false);
+
+  useEffect(() => {
+    if (!lastSaved) return;
+    setShowSaved(true);
+    const t = setTimeout(() => setShowSaved(false), 2000);
+    return () => clearTimeout(t);
+  }, [lastSaved]);
+
+  const visible = saving || showSaved;
+
+  return (
+    <div
+      className="fixed z-[200] pointer-events-none"
+      style={{
+        right: 20,
+        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)',
+      }}
+    >
+      <AnimatePresence>
+        {visible && (
+          <motion.div
+            initial={{ opacity: 0, y: 8, scale: 0.92 }}
+            animate={{ opacity: 1, y: 0,  scale: 1    }}
+            exit={{   opacity: 0, y: 4,   scale: 0.94 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="flex items-center gap-2 text-xs font-medium px-3.5 py-2.5 rounded-2xl"
+            style={{
+              background: saving
+                ? 'var(--bg-raised)'
+                : 'var(--green-bg)',
+              color: saving ? 'var(--text-3)' : 'var(--green)',
+              border: saving
+                ? '1px solid var(--border-md)'
+                : '1px solid var(--green-border)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+            }}
+          >
+            {saving
+              ? <><Loader2 size={12} className="animate-spin" /> Salvando...</>
+              : <><CheckCircle2 size={12} /> Salvo</>
+            }
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 import LoginPage      from './components/auth/LoginPage';
 import WelcomeScreen  from './components/auth/WelcomeScreen';
@@ -149,6 +204,7 @@ function AuthenticatedApp({ user }) {
         />
       )}
       <AppShell />
+      <SaveToast />
     </AppProvider>
   );
 }

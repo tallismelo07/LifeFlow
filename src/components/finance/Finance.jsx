@@ -154,30 +154,65 @@ export default function Finance() {
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Balance */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Balance — card gradiente de destaque */}
         <motion.div
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-          className="col-span-2 lg:col-span-1 card"
+          className="col-span-2 lg:col-span-2 rounded-2xl p-5 relative overflow-hidden"
+          style={{
+            background: monthBalance >= 0
+              ? 'linear-gradient(135deg, #1a2e1e 0%, #0d1f10 100%)'
+              : 'linear-gradient(135deg, #2e1a1a 0%, #1f0d0d 100%)',
+            border: `1px solid ${monthBalance >= 0 ? 'rgba(76,175,125,0.20)' : 'rgba(224,92,92,0.20)'}`,
+            boxShadow: monthBalance >= 0
+              ? '0 8px 32px rgba(76,175,125,0.12)'
+              : '0 8px 32px rgba(224,92,92,0.12)',
+          }}
         >
-          <div className="flex items-center justify-between mb-3">
-            <span className="label">SALDO</span>
-            <div
-              className="p-2 rounded-xl"
-              style={{ background: (monthBalance >= 0 ? 'var(--green)' : 'var(--red)') + '22' }}
+          {/* Glow de fundo */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: monthBalance >= 0
+                ? 'radial-gradient(ellipse 60% 60% at 80% 20%, rgba(76,175,125,0.15) 0%, transparent 70%)'
+                : 'radial-gradient(ellipse 60% 60% at 80% 20%, rgba(224,92,92,0.12) 0%, transparent 70%)',
+            }}
+          />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.45)', letterSpacing: '0.08em' }}>
+                Saldo Total
+              </span>
+              <div
+                className="p-2 rounded-xl"
+                style={{ background: monthBalance >= 0 ? 'rgba(76,175,125,0.15)' : 'rgba(224,92,92,0.15)' }}
+              >
+                <Wallet size={14} style={{ color: monthBalance >= 0 ? 'var(--green)' : 'var(--red)' }} />
+              </div>
+            </div>
+            <p
+              className="font-bold"
+              style={{ color: '#f8f9fa', fontSize: 'clamp(1.6rem, 4vw, 2.2rem)', lineHeight: 1 }}
             >
-              <Wallet size={13} style={{ color: monthBalance >= 0 ? 'var(--green)' : 'var(--red)' }} />
+              {fmt(monthBalance)}
+            </p>
+            {/* Barra de economia */}
+            <div className="mt-4">
+              <div className="flex justify-between text-xs mb-1.5" style={{ color: 'rgba(255,255,255,0.40)' }}>
+                <span>Economia do mês</span>
+                <span style={{ color: monthBalance >= 0 ? 'var(--green)' : 'var(--red)' }}>{savingsRate}%</span>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                <motion.div
+                  className="h-full rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(savingsRate, 100)}%` }}
+                  transition={{ duration: 0.8, delay: 0.2 }}
+                  style={{ background: monthBalance >= 0 ? 'var(--green)' : 'var(--red)' }}
+                />
+              </div>
             </div>
           </div>
-          <p
-            className="font-bold text-3xl"
-            style={{ color: monthBalance >= 0 ? 'var(--green)' : 'var(--red)' }}
-          >
-            {fmt(monthBalance)}
-          </p>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-4)' }}>
-            Poupança: <span style={{ color: 'var(--text-3)' }}>{savingsRate}%</span>
-          </p>
         </motion.div>
 
         {/* Income */}

@@ -1,5 +1,5 @@
 // src/components/layout/Header.jsx
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp }   from '../../context/AppContext';
 import { useAuth }  from '../../context/AuthContext';
@@ -10,44 +10,6 @@ import {
   KeyRound, Eye, EyeOff, X, CheckCircle2, Loader2, User, Save,
 } from 'lucide-react';
 
-// ── Indicador de salvamento ──────────────────────────────────────────────────
-
-function SaveIndicator({ saving, lastSaved }) {
-  const [showSaved, setShowSaved] = useState(false);
-
-  useEffect(() => {
-    if (!lastSaved) return;
-    setShowSaved(true);
-    const t = setTimeout(() => setShowSaved(false), 2200);
-    return () => clearTimeout(t);
-  }, [lastSaved]);
-
-  const visible = saving || showSaved;
-
-  return (
-    <AnimatePresence>
-      {visible && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.85 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.85 }}
-          transition={{ duration: 0.18 }}
-          className="hidden sm:flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-xl"
-          style={{
-            background: saving ? 'var(--bg-muted)' : 'var(--green-bg)',
-            color:      saving ? 'var(--text-4)'   : 'var(--green)',
-            border:     saving ? '1px solid var(--border)' : '1px solid var(--green-border)',
-          }}
-        >
-          {saving
-            ? <><Loader2 size={11} className="animate-spin" /> Salvando</>
-            : <><CheckCircle2 size={11} /> Salvo</>
-          }
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
 
 const TITLES = {
   dashboard: { title: 'Dashboard',       sub: 'Visão geral do seu dia' },
@@ -321,7 +283,7 @@ function AccountModal({ onClose }) {
 // ── Header principal ─────────────────────────────────────────────────────────
 
 export default function Header({ onOpenCmd }) {
-  const { activeTab, setSidebarOpen, saving, lastSaved } = useApp();
+  const { activeTab, setSidebarOpen } = useApp();
   const { currentUser, logout } = useAuth();
   const { isDark, toggle: toggleTheme } = useTheme();
   const { title, sub } = TITLES[activeTab] || TITLES.dashboard;
@@ -388,9 +350,6 @@ export default function Header({ onOpenCmd }) {
               {isAdmin && <Shield size={11} style={{ color: 'var(--amber)' }} />}
             </motion.button>
           )}
-
-          {/* Save indicator */}
-          <SaveIndicator saving={saving} lastSaved={lastSaved} />
 
           {/* Theme toggle */}
           <motion.button

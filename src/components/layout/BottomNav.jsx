@@ -5,23 +5,23 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useApp  } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import {
-  LayoutDashboard, CheckSquare, Flame, Calendar,
-  Wallet, Target, CalendarCheck, Shield, MoreHorizontal, Lightbulb,
+  Wallet, Flame, LayoutDashboard, CheckSquare,
+  Target, Shield, Lightbulb, MoreHorizontal, CalendarCheck,
 } from 'lucide-react';
 
-// Itens fixos na barra inferior (4 + FAB central)
+// Navegação principal inspirada no design de referência:
+// Finanças · Rotina · [FAB Atlas] · Trilha · Metas · Menu
 const LEFT_ITEMS = [
-  { id: 'tasks',  label: 'Tarefas', icon: CheckSquare },
-  { id: 'habits', label: 'Hábitos', icon: Flame },
+  { id: 'finance', label: 'Finanças', icon: Wallet },
+  { id: 'habits',  label: 'Rotina',   icon: Flame  },
 ];
 const RIGHT_ITEMS = [
-  { id: 'agenda',  label: 'Agenda',     icon: Calendar },
-  { id: 'finance', label: 'Financeiro', icon: Wallet },
+  { id: 'tasks',  label: 'Trilha', icon: CheckSquare },
+  { id: 'goals',  label: 'Metas',  icon: Target      },
 ];
-// Itens no sheet "Mais"
 const MORE_BASE = [
-  { id: 'goals',  label: 'Metas',   icon: Target },
-  { id: 'weekly', label: 'Revisão', icon: CalendarCheck },
+  { id: 'agenda',  label: 'Agenda',  icon: CalendarCheck },
+  { id: 'weekly',  label: 'Revisão', icon: CalendarCheck },
 ];
 
 function NavBtn({ item, active, badge, onClick }) {
@@ -42,7 +42,7 @@ function NavBtn({ item, active, badge, onClick }) {
         <motion.div
           layoutId="bottom-indicator"
           className="absolute top-0 rounded-full"
-          style={{ height: 2, width: 28, background: 'var(--accent-light)' }}
+          style={{ height: 2, width: 28, background: 'var(--text-2)' }}
           transition={{ type: 'spring', stiffness: 500, damping: 34 }}
         />
       )}
@@ -61,7 +61,7 @@ function NavBtn({ item, active, badge, onClick }) {
           </span>
         )}
       </motion.div>
-      <span className="text-[9px] font-medium leading-none tracking-wide uppercase" style={{ letterSpacing: '0.04em' }}>
+      <span className="text-[9px] font-medium leading-none uppercase" style={{ letterSpacing: '0.04em' }}>
         {item.label}
       </span>
     </button>
@@ -71,7 +71,7 @@ function NavBtn({ item, active, badge, onClick }) {
 export default function BottomNav() {
   const { activeTab, setActiveTab, tasks, habits } = useApp();
   const { currentUser } = useAuth();
-  const isAdmin  = currentUser?.role === 'admin';
+  const isAdmin   = currentUser?.role === 'admin';
   const [moreOpen, setMoreOpen] = useState(false);
 
   const todayStr     = new Date().toISOString().split('T')[0];
@@ -80,13 +80,13 @@ export default function BottomNav() {
   const badges       = { tasks: pendingTasks || null, habits: habitsLeft || null };
 
   const allMore = isAdmin
-    ? [...MORE_BASE, { id: 'admin',    label: 'Admin',     icon: Shield }]
+    ? [...MORE_BASE, { id: 'admin',    label: 'Admin',     icon: Shield    }]
     : [...MORE_BASE, { id: 'feedback', label: 'Sugestões', icon: Lightbulb }];
 
   const isMoreActive = allMore.some((i) => i.id === activeTab);
+  const homeActive   = activeTab === 'dashboard';
 
   const goTo = (id) => { setActiveTab(id); setMoreOpen(false); };
-  const homeActive = activeTab === 'dashboard';
 
   return (
     <>
@@ -111,7 +111,7 @@ export default function BottomNav() {
           />
         ))}
 
-        {/* FAB central — Dashboard */}
+        {/* FAB central — Dashboard (Atlas) */}
         <div style={{ flex: '1 1 0%', position: 'relative', overflow: 'visible' }}>
           <motion.button
             type="button"
@@ -131,7 +131,7 @@ export default function BottomNav() {
               WebkitTapHighlightColor: 'transparent',
               background: homeActive ? 'var(--blue)' : 'var(--bg-raised)',
               boxShadow: homeActive
-                ? '0 0 0 3px var(--blue-border), 0 4px 18px rgba(58,90,64,0.40)'
+                ? '0 0 0 3px var(--blue-border), 0 4px 18px rgba(0,0,0,0.45)'
                 : '0 2px 10px rgba(0,0,0,0.50)',
               border: homeActive
                 ? '2px solid var(--blue-border)'
@@ -157,7 +157,7 @@ export default function BottomNav() {
           />
         ))}
 
-        {/* Botão Mais */}
+        {/* Botão Menu */}
         <button
           type="button"
           onClick={() => setMoreOpen((o) => !o)}
@@ -173,7 +173,7 @@ export default function BottomNav() {
             <motion.div
               layoutId="bottom-indicator"
               className="absolute top-0 rounded-full"
-              style={{ height: 2, width: 28, background: 'var(--accent-light)' }}
+              style={{ height: 2, width: 28, background: 'var(--text-2)' }}
               transition={{ type: 'spring', stiffness: 500, damping: 34 }}
             />
           )}
@@ -184,12 +184,12 @@ export default function BottomNav() {
             <MoreHorizontal size={20} strokeWidth={1.6} />
           </motion.div>
           <span className="text-[9px] font-medium leading-none uppercase" style={{ letterSpacing: '0.04em' }}>
-            Mais
+            Menu
           </span>
         </button>
       </nav>
 
-      {/* Sheet "Mais" */}
+      {/* Sheet "Menu" */}
       <AnimatePresence>
         {moreOpen && (
           <>
