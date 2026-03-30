@@ -24,11 +24,11 @@ import { apiBaseURL } from '../services/api';
 export const genId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 export const today = () => new Date().toISOString().split('T')[0];
 
-const DATA_FIELDS = ['tasks', 'habits', 'transactions', 'studyItems', 'notes', 'goals', 'agenda'];
+const DATA_FIELDS = ['tasks', 'habits', 'transactions', 'studyItems', 'notes', 'goals', 'agenda', 'cards'];
 
 const emptyData = () => ({
   tasks: [], habits: [], transactions: [],
-  studyItems: [], notes: [], goals: [], agenda: [],
+  studyItems: [], notes: [], goals: [], agenda: [], cards: [],
 });
 
 function countItems(d) {
@@ -299,6 +299,11 @@ export function AppProvider({ children }) {
   const updateEvent       = (id, u) => update('agenda', (a) => a.map((x) => x.id === id ? { ...x, ...u } : x));
   const deleteEvent       = (id)    => update('agenda', (a) => a.filter((x) => x.id !== id));
 
+  const cards             = data.cards || [];
+  const addCard           = (c)     => update('cards', (a) => [...a, { ...c, id: genId(), createdAt: new Date().toISOString() }]);
+  const updateCard        = (id, u) => update('cards', (a) => a.map((x) => x.id === id ? { ...x, ...u } : x));
+  const deleteCard        = (id)    => update('cards', (a) => a.filter((x) => x.id !== id));
+
   return (
     <AppContext.Provider value={{
       tasks,        addTask,    updateTask,    deleteTask,    toggleTask,
@@ -308,6 +313,7 @@ export function AppProvider({ children }) {
       notes,        addNote,    updateNote,    deleteNote,
       goals,        addGoal,    updateGoal,    deleteGoal,
       agenda,       addEvent,   updateEvent,   deleteEvent,
+      cards,        addCard,    updateCard,    deleteCard,
     }}>
       {children}
     </AppContext.Provider>

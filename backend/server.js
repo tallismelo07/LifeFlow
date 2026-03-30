@@ -1,5 +1,5 @@
 // ============================================================
-//  server.js — LifeFlow Backend v6
+//  server.js — LifeFlow Backend v7
 //  Node.js + Express + JWT + bcryptjs + SQLite (better-sqlite3)
 // ============================================================
 
@@ -17,12 +17,6 @@ const JWT_SECRET  = process.env.JWT_SECRET || 'lifeflow-secret-2024-mude-em-prod
 const JWT_EXPIRY  = '7d';
 const SALT_ROUNDS = 10;
 
-// CRÍTICO: path absoluto para o banco de dados.
-// Se a variável DB_PATH não for definida no ambiente do Render,
-// o banco fica em /opt/render/project/src/backend/lifeflow.db
-// — que é EFÊMERO (apagado quando o dyno reinicia).
-// Para produção real, use um banco externo (PostgreSQL, PlanetScale etc.)
-// ou monte um Render Disk persistente e defina DB_PATH=/mnt/data/lifeflow.db
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'lifeflow.db');
 
 const SEED_USERS = [
@@ -61,9 +55,18 @@ setInterval(() => {
 // ── Banco de dados SQLite ────────────────────────────────────
 
 const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('synchronous  = FULL');   // FULL = dados persistem mesmo em crash do SO
+
+// Performance e durabilidade
+db.pragma('journal_mode = WAL');       // Write-Ahead Log: leituras não bloqueiam escritas
+db.pragma('synchronous  = NORMAL');    // NORMAL é seguro com WAL; FULL é mais lento sem benefício real
 db.pragma('foreign_keys = ON');
+db.pragma('cache_size   = -32000');    // 32 MB de cache em memória
+db.pragma('temp_store   = MEMORY');    // tabelas temporárias na RAM
+db.pragma('mmap_size    = 268435456'); // 256 MB mmap para leitura rápida
+db.pragma('wal_autocheckpoint = 1000');
+
+// ── Timestamp helper — SEMPRE ISO8601 UTC com sufixo Z ───────
+function nowISO() { return new Date().toISOString(); }
 
 // ── Log no banco (helper) ────────────────────────────────────
 
@@ -72,21 +75,17 @@ function logDB(level, message, source = 'system', userId = null) {
   try {
     if (!_logStmt) {
       _logStmt = db.prepare(
-        'INSERT INTO logs (level, message, source, user_id) VALUES (?, ?, ?, ?)'
+        'INSERT INTO logs (level, message, source, user_id, created_at) VALUES (?, ?, ?, ?, ?)'
       );
     }
-    _logStmt.run(level, String(message).slice(0, 500), source, userId || null);
+    _logStmt.run(level, String(message).slice(0, 500), source, userId || null, nowISO());
   } catch { /* nunca falha */ }
 }
-
-// ── Timestamp helper — SEMPRE ISO8601 UTC com sufixo Z ───────
-// Garante que o browser parseia corretamente como UTC em new Date(str)
-// SQLite datetime('now') retorna sem timezone → browser parseia como LOCAL → bug!
-function nowISO() { return new Date().toISOString(); }
 
 // ── Init do banco ────────────────────────────────────────────
 
 function initDB() {
+  // ── Tabelas ─────────────────────────────────────────────────
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,7 +94,7 @@ function initDB() {
       role       TEXT    NOT NULL DEFAULT 'user',
       name       TEXT    NOT NULL,
       avatar     TEXT    NOT NULL,
-      color      TEXT    NOT NULL,
+      color      TEXT    NOT NULL DEFAULT '#5B8DEF',
       email      TEXT    NOT NULL DEFAULT '',
       last_login TEXT,
       last_seen  TEXT,
@@ -114,8 +113,9 @@ function initDB() {
       goals        TEXT    NOT NULL DEFAULT '[]',
       study_items  TEXT    NOT NULL DEFAULT '[]',
       transactions TEXT    NOT NULL DEFAULT '[]',
+      cards        TEXT    NOT NULL DEFAULT '[]',
       updated_at   TEXT    NOT NULL DEFAULT '',
-      FOREIGN KEY (user_id) REFERENCES users(id)
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
 
@@ -125,7 +125,7 @@ function initDB() {
       user_id    INTEGER NOT NULL,
       message    TEXT    NOT NULL,
       created_at TEXT    NOT NULL DEFAULT '',
-      FOREIGN KEY (user_id) REFERENCES users(id)
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
 
@@ -140,14 +140,34 @@ function initDB() {
     )
   `);
 
-  // Migrações seguras: adiciona colunas que possam estar faltando
-  const userCols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+  // ── Índices para melhor performance ─────────────────────────
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_user_data_user_id  ON user_data (user_id);
+    CREATE INDEX IF NOT EXISTS idx_feedbacks_user_id  ON feedbacks (user_id);
+    CREATE INDEX IF NOT EXISTS idx_feedbacks_created  ON feedbacks (created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_logs_created       ON logs (created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_logs_user_id       ON logs (user_id);
+    CREATE INDEX IF NOT EXISTS idx_logs_level         ON logs (level);
+  `);
+
+  // ── Migrações — adiciona colunas que possam estar faltando ──
+  const userCols     = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+  const userDataCols = db.prepare('PRAGMA table_info(user_data)').all().map((c) => c.name);
+
   if (!userCols.includes('email')) {
     db.exec("ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''");
-    console.log('✓ Coluna email adicionada');
+    console.log('✓ Migração: coluna users.email adicionada');
+  }
+  if (!userDataCols.includes('cards')) {
+    db.exec("ALTER TABLE user_data ADD COLUMN cards TEXT NOT NULL DEFAULT '[]'");
+    console.log('✓ Migração: coluna user_data.cards adicionada');
+  }
+  if (!userDataCols.includes('notes')) {
+    db.exec("ALTER TABLE user_data ADD COLUMN notes TEXT NOT NULL DEFAULT '[]'");
+    console.log('✓ Migração: coluna user_data.notes adicionada');
   }
 
-  // Seed dos usuários iniciais
+  // ── Seed dos usuários iniciais ───────────────────────────────
   const insertUser = db.prepare(`
     INSERT OR IGNORE INTO users (username, password, role, name, avatar, color)
     VALUES (@username, @password, @role, @name, @avatar, @color)
@@ -161,7 +181,6 @@ function initDB() {
     for (const s of seeds) {
       insertUser.run({ ...s, password: bcrypt.hashSync(s.password, SALT_ROUNDS) });
       ensureData.run({ username: s.username });
-      console.log(`✓ Usuário verificado: ${s.username}`);
     }
   });
 
@@ -180,19 +199,15 @@ function prepareStatements() {
   stmts.setOffline     = db.prepare('UPDATE users SET is_online=0 WHERE id=?');
   stmts.touchSeen      = db.prepare('UPDATE users SET is_online=1, last_seen=? WHERE id=?');
   stmts.getAllUsers     = db.prepare(
-    'SELECT id,username,role,name,avatar,color,email,last_login,last_seen,is_online FROM users'
+    'SELECT id,username,role,name,avatar,color,email,last_login,last_seen,is_online FROM users ORDER BY name'
   );
   stmts.getUserData = db.prepare('SELECT * FROM user_data WHERE user_id = ?');
 
-  // ── upsertData: salva dados do usuário ───────────────────────
-  // ATENÇÃO: updated_at sempre vem como parâmetro (nowISO()) — nunca datetime('now')
-  // Isso garante que o timestamp seja ISO8601 com Z e seja parseado corretamente
-  // no browser como UTC.
   stmts.upsertData = db.prepare(`
     INSERT INTO user_data
-      (user_id, tasks, habits, agenda, notes, goals, study_items, transactions, updated_at)
+      (user_id, tasks, habits, agenda, notes, goals, study_items, transactions, cards, updated_at)
     VALUES
-      (@user_id, @tasks, @habits, @agenda, @notes, @goals, @study_items, @transactions, @updated_at)
+      (@user_id, @tasks, @habits, @agenda, @notes, @goals, @study_items, @transactions, @cards, @updated_at)
     ON CONFLICT(user_id) DO UPDATE SET
       tasks        = @tasks,
       habits       = @habits,
@@ -201,16 +216,18 @@ function prepareStatements() {
       goals        = @goals,
       study_items  = @study_items,
       transactions = @transactions,
+      cards        = @cards,
       updated_at   = @updated_at
   `);
 
-  stmts.insertFeedback  = db.prepare('INSERT INTO feedbacks (user_id, message, created_at) VALUES (?, ?, ?)');
-  stmts.getAllFeedbacks  = db.prepare(`
+  stmts.insertFeedback = db.prepare('INSERT INTO feedbacks (user_id, message, created_at) VALUES (?, ?, ?)');
+  stmts.getAllFeedbacks = db.prepare(`
     SELECT f.id, f.message, f.created_at,
            u.name AS user_name, u.username, u.avatar, u.color
     FROM feedbacks f
     JOIN users u ON u.id = f.user_id
     ORDER BY f.created_at DESC
+    LIMIT 500
   `);
   stmts.getLogs = db.prepare(`
     SELECT l.id, l.level, l.message, l.source, l.created_at, u.username
@@ -223,12 +240,13 @@ function prepareStatements() {
 
 // ── Helpers ──────────────────────────────────────────────────
 
-const DATA_FIELDS = ['tasks', 'habits', 'agenda', 'notes', 'goals', 'studyItems', 'transactions'];
+const DATA_FIELDS = ['tasks', 'habits', 'agenda', 'notes', 'goals', 'studyItems', 'transactions', 'cards'];
 
 function parseUserData(row) {
   if (!row) return {
     tasks: [], habits: [], agenda: [], notes: [],
-    goals: [], studyItems: [], transactions: [], updated_at: null,
+    goals: [], studyItems: [], transactions: [], cards: [],
+    updated_at: null,
   };
   return {
     tasks:        safeJSON(row.tasks,        []),
@@ -238,6 +256,7 @@ function parseUserData(row) {
     goals:        safeJSON(row.goals,        []),
     studyItems:   safeJSON(row.study_items,  []),
     transactions: safeJSON(row.transactions, []),
+    cards:        safeJSON(row.cards,        []),
     updated_at:   row.updated_at || null,
   };
 }
@@ -266,8 +285,9 @@ function auth(req, res, next) {
   try {
     req.user = jwt.verify(h.split(' ')[1], JWT_SECRET);
     next();
-  } catch {
-    return res.status(401).json({ error: 'Token inválido ou expirado.' });
+  } catch (err) {
+    const msg = err.name === 'TokenExpiredError' ? 'Sessão expirada. Faça login novamente.' : 'Token inválido.';
+    return res.status(401).json({ error: msg });
   }
 }
 
@@ -302,11 +322,11 @@ app.use((req, _res, next) => {
 // ════════════════════════════════════════════════════════════
 
 app.get('/', (_req, res) =>
-  res.json({ name: 'LifeFlow API', status: 'ok', version: '6.0.0' })
+  res.json({ name: 'LifeFlow API', status: 'ok', version: '7.0.0' })
 );
 
 app.get('/api/health', (_req, res) =>
-  res.json({ status: 'ok', time: nowISO(), db: DB_PATH })
+  res.json({ status: 'ok', time: nowISO(), db: DB_PATH, version: '7.0.0' })
 );
 
 // ── Login ────────────────────────────────────────────────────
@@ -321,7 +341,7 @@ app.post('/api/login', async (req, res) => {
 
   const key = username.trim().toLowerCase();
   if (!checkRateLimit(key)) {
-    logDB('warn', `Rate limit: ${key}`, 'auth');
+    logDB('warn', `Rate limit atingido: ${key}`, 'auth');
     return res.status(429).json({ error: 'Muitas tentativas. Aguarde 15 minutos.' });
   }
 
@@ -374,8 +394,7 @@ app.patch('/api/heartbeat', auth, (req, res) => {
 app.get('/api/data', auth, (req, res) => {
   const row  = stmts.getUserData.get(req.user.id);
   const data = parseUserData(row);
-  const total = countItems(data);
-  console.log(`[GET /api/data] user=${req.user.username} total=${total} itens updated_at=${data.updated_at || 'null'}`);
+  console.log(`[GET /api/data] user=${req.user.username} total=${countItems(data)} itens`);
   return res.json({ data });
 });
 
@@ -384,41 +403,33 @@ app.post('/api/data', auth, (req, res) => {
   const incoming = req.body?.data;
 
   if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
-    logDB('error', 'POST /api/data — body inválido', 'data', req.user.id);
     return res.status(400).json({ error: 'Campo "data" é obrigatório e deve ser objeto.' });
   }
 
   // Valida que todos os campos enviados são arrays
   for (const f of DATA_FIELDS) {
-    if (incoming[f] !== undefined && !Array.isArray(incoming[f])) {
-      return res.status(400).json({ error: `Campo "${f}" deve ser array.` });
+    const key = f === 'studyItems' ? 'studyItems' : f;
+    if (incoming[key] !== undefined && !Array.isArray(incoming[key])) {
+      return res.status(400).json({ error: `Campo "${key}" deve ser array.` });
     }
   }
 
-  // ── Proteção anti-wipe ───────────────────────────────────────
-  // Conta quantos itens o cliente está enviando
   const incomingTotal = countItems(incoming);
 
-  // Busca o que existe atualmente no banco
-  const existing    = stmts.getUserData.get(req.user.id);
-  const currentData = parseUserData(existing);
+  // Busca o estado atual no banco
+  const existing     = stmts.getUserData.get(req.user.id);
+  const currentData  = parseUserData(existing);
   const currentTotal = countItems(currentData);
 
-  // Se o cliente manda ZERO itens mas o banco já tem dados,
-  // isso é provavelmente um bug ou race condition no frontend.
-  // Registra o aviso mas NÃO sobrescreve — retorna ok para não travar o cliente.
+  // Proteção anti-wipe: não sobrescreve dados existentes com payload vazio
   if (incomingTotal === 0 && currentTotal > 0) {
     logDB('warn',
-      `POST /api/data — recusado (cliente enviou 0 itens, banco tem ${currentTotal}). user=${req.user.username}`,
+      `Anti-wipe: recusado (0 itens recebidos, banco tem ${currentTotal}). user=${req.user.username}`,
       'data', req.user.id
     );
-    console.warn(`[POST /api/data] ⚠ Recusado: cliente enviou 0 itens mas banco tem ${currentTotal}. user=${req.user.username}`);
-    // Retorna ok sem sobrescrever
     return res.json({ ok: true, protected: true });
   }
 
-  // Merge: para cada campo, usa o que veio do cliente se definido,
-  // ou mantém o que estava no banco (segurança extra)
   const toSave = {
     user_id:      req.user.id,
     tasks:        JSON.stringify(incoming.tasks        ?? currentData.tasks),
@@ -428,11 +439,11 @@ app.post('/api/data', auth, (req, res) => {
     goals:        JSON.stringify(incoming.goals        ?? currentData.goals),
     study_items:  JSON.stringify(incoming.studyItems   ?? currentData.studyItems),
     transactions: JSON.stringify(incoming.transactions ?? currentData.transactions),
-    updated_at:   nowISO(),   // ← SEMPRE ISO8601 com Z (UTC explícito)
+    cards:        JSON.stringify(incoming.cards        ?? currentData.cards),
+    updated_at:   nowISO(),
   };
 
   stmts.upsertData.run(toSave);
-
   console.log(`[POST /api/data] ✓ user=${req.user.username} total=${incomingTotal} itens`);
   return res.json({ ok: true, total: incomingTotal });
 });
@@ -446,8 +457,7 @@ app.patch('/api/user/profile', auth, (req, res) => {
   const cleanName  = name.trim().slice(0, 64);
   const cleanEmail = String(email || '').trim().slice(0, 128);
 
-  db.prepare('UPDATE users SET name=?, email=? WHERE id=?')
-    .run(cleanName, cleanEmail, req.user.id);
+  db.prepare('UPDATE users SET name=?, email=? WHERE id=?').run(cleanName, cleanEmail, req.user.id);
   logDB('info', `Perfil atualizado: ${req.user.username} → "${cleanName}"`, 'profile', req.user.id);
   return res.json({ ok: true, name: cleanName, email: cleanEmail });
 });
@@ -500,7 +510,7 @@ app.post('/api/feedback', auth, (req, res) => {
   if (!message || typeof message !== 'string' || message.trim().length < 3)
     return res.status(400).json({ error: 'Mensagem inválida (mínimo 3 caracteres).' });
   if (message.length > 2000)
-    return res.status(400).json({ error: 'Mensagem muito longa (máx 2000).' });
+    return res.status(400).json({ error: 'Mensagem muito longa (máximo 2000 caracteres).' });
 
   stmts.insertFeedback.run(req.user.id, message.trim(), nowISO());
   logDB('info', `Feedback de ${req.user.username}`, 'feedback', req.user.id);
@@ -559,7 +569,7 @@ app.use((_req, res) => res.status(404).json({ error: 'Rota não encontrada.' }))
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
-  console.error('[ERROR]', err.message || err);
+  console.error('[ERRO INTERNO]', err.message || err);
   logDB('error', err.message || 'Erro interno', 'system');
   res.status(err.status || 500).json({ error: err.message || 'Erro interno do servidor.' });
 });
@@ -573,7 +583,7 @@ prepareStatements();
 
 app.listen(PORT, () => {
   console.log('');
-  console.log('🚀 LifeFlow Backend v6');
+  console.log('🚀 LifeFlow Backend v7');
   console.log(`   http://localhost:${PORT}`);
   console.log(`   DB: ${DB_PATH}`);
   console.log('');
