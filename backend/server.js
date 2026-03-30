@@ -231,7 +231,22 @@ function adminOnly(req, res, next) {
 // ── Express app ──────────────────────────────────────────────
 
 const app = express();
-app.use(cors({ origin: '*' }));
+
+// ── CORS — DEVE ser o primeiro middleware ────────────────────
+// Permite qualquer origin (Vercel, localhost, mobile)
+const corsOptions = {
+  origin: true,                     // reflete o origin do request
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false,
+};
+
+app.use(cors(corsOptions));
+
+// Preflight: responde OPTIONS para QUALQUER rota antes de qualquer handler
+// SEM ISSO o browser recebe 405 em toda requisição cross-origin
+app.options('*', cors(corsOptions));
+
 app.use(express.json({ limit: '5mb' }));
 app.use((req, _res, next) => {
   console.log(`${new Date().toLocaleTimeString('pt-BR')}  ${req.method} ${req.path}`);
