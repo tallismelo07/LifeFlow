@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useApp  } from '../../context/AppContext';
+import { useNav  } from '../../context/NavContext';
 import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard, Wallet, Flame,
@@ -79,15 +79,10 @@ function TabBtn({ item, active, badge, onClick }) {
 }
 
 export default function BottomNav() {
-  const { activeTab, setActiveTab, tasks, habits } = useApp();
+  const { activeTab, setActiveTab } = useNav();
   const { currentUser } = useAuth();
   const isAdmin  = currentUser?.role === 'admin';
   const [moreOpen, setMoreOpen] = useState(false);
-
-  const todayStr     = new Date().toISOString().split('T')[0];
-  const pendingTasks = tasks.filter((t) => !t.completed).length;
-  const habitsLeft   = habits.filter((h) => !h.completedDates?.includes(todayStr)).length;
-  const badges       = { tasks: pendingTasks || null, habits: habitsLeft || null };
 
   const allMore = isAdmin
     ? [...MORE_BASE, { id: 'admin',    label: 'Admin',     icon: Shield    }]

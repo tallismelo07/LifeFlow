@@ -1,7 +1,7 @@
 // src/components/ui/CommandPalette.jsx — animated command palette
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useApp }  from '../../context/AppContext';
+import { useNav }  from '../../context/NavContext';
 import { useAuth } from '../../context/AuthContext';
 import {
   Search, LayoutDashboard, CheckSquare, Flame, Wallet,
@@ -22,7 +22,7 @@ const BASE_COMMANDS = [
 ];
 
 export default function CommandPalette({ open, onClose }) {
-  const { setActiveTab }   = useApp();
+  const { setActiveTab }   = useNav();
   const { currentUser, logout } = useAuth();
   const [query,    setQuery]    = useState('');
   const [selected, setSelected] = useState(0);

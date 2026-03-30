@@ -1,6 +1,7 @@
 // src/components/layout/Sidebar.jsx
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp }  from '../../context/AppContext';
+import { useNav }  from '../../context/NavContext';
 import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard, CheckSquare, Flame, Wallet,
@@ -56,7 +57,8 @@ function NavItem({ item, isActive, onClick, badge }) {
 }
 
 export default function Sidebar() {
-  const { activeTab, setActiveTab, tasks, habits, sidebarOpen, setSidebarOpen } = useApp();
+  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen } = useNav();
+  const { tasks, habits } = useApp();
   const { currentUser } = useAuth();
 
   const isAdmin   = currentUser?.role === 'admin';

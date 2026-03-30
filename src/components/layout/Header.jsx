@@ -1,7 +1,7 @@
 // src/components/layout/Header.jsx
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useApp }   from '../../context/AppContext';
+import { useNav }   from '../../context/NavContext';
 import { useAuth }  from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { changePasswordRequest } from '../../services/authService';
@@ -283,7 +283,7 @@ function AccountModal({ onClose }) {
 // ── Header principal ─────────────────────────────────────────────────────────
 
 export default function Header({ onOpenCmd }) {
-  const { activeTab, setSidebarOpen } = useApp();
+  const { activeTab, setSidebarOpen } = useNav();
   const { currentUser, logout } = useAuth();
   const { isDark, toggle: toggleTheme } = useTheme();
   const { title, sub } = TITLES[activeTab] || TITLES.dashboard;

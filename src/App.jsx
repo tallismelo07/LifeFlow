@@ -2,74 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from './context/AuthContext';
-import { AppProvider, useApp } from './context/AppContext';
-import { Loader2, CheckCircle2 } from 'lucide-react';
-
-// ── Toast de salvamento ───────────────────────────────────────────────────────
-// Usa eventos DOM customizados (lf:save-start / lf:save-done) em vez de
-// estado React do AppContext. Desta forma, ZERO componente de navegação
-// re-renderiza durante o salvamento — sem flickering, sem pisca.
-function SaveToast() {
-  const [status, setStatus] = useState(null); // null | 'saving' | 'saved'
-
-  useEffect(() => {
-    let hideTimer = null;
-
-    const onStart = () => {
-      clearTimeout(hideTimer);
-      setStatus('saving');
-    };
-    const onDone = (e) => {
-      clearTimeout(hideTimer);
-      if (e.detail?.ok) {
-        setStatus('saved');
-        hideTimer = setTimeout(() => setStatus(null), 1800);
-      } else {
-        setStatus(null);
-      }
-    };
-
-    document.addEventListener('lf:save-start', onStart);
-    document.addEventListener('lf:save-done',  onDone);
-    return () => {
-      document.removeEventListener('lf:save-start', onStart);
-      document.removeEventListener('lf:save-done',  onDone);
-      clearTimeout(hideTimer);
-    };
-  }, []);
-
-  return (
-    <div
-      className="fixed z-[200] pointer-events-none"
-      style={{ right: 16, bottom: 'calc(env(safe-area-inset-bottom, 0px) + 76px)' }}
-    >
-      <AnimatePresence>
-        {status && (
-          <motion.div
-            key={status}
-            initial={{ opacity: 0, y: 6, scale: 0.92 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{   opacity: 0, y: 4, scale: 0.94 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="flex items-center gap-2 text-xs font-medium px-3.5 py-2.5 rounded-2xl"
-            style={{
-              background:  status === 'saving' ? 'var(--bg-raised)' : 'var(--green-bg)',
-              color:       status === 'saving' ? 'var(--text-3)'    : 'var(--green)',
-              border:      status === 'saving' ? '1px solid var(--border-md)' : '1px solid var(--green-border)',
-              boxShadow:   '0 4px 16px rgba(0,0,0,0.35)',
-            }}
-          >
-            {status === 'saving'
-              ? <><Loader2 size={12} className="animate-spin" /> Salvando</>
-              : <><CheckCircle2 size={12} /> Salvo</>
-            }
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
+import { useAuth }  from './context/AuthContext';
+import { AppProvider } from './context/AppContext';
+import { NavProvider, useNav } from './context/NavContext';
+import { Leaf } from 'lucide-react';
 
 import LoginPage      from './components/auth/LoginPage';
 import WelcomeScreen  from './components/auth/WelcomeScreen';
@@ -87,9 +23,8 @@ import Agenda     from './components/agenda/Agenda';
 import AdminPanel from './components/admin/AdminPanel';
 import Feedback   from './components/feedback/Feedback';
 import CommandPalette from './components/ui/CommandPalette';
-import { Leaf } from 'lucide-react';
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 const VIEWS = {
   dashboard: Dashboard,
@@ -105,21 +40,16 @@ const VIEWS = {
 
 const SHORTCUTS = {
   '1': 'dashboard', '2': 'tasks',  '3': 'habits',
-  '4': 'agenda',    '5': 'finance','6': 'goals',
-  '7': 'weekly',
+  '4': 'agenda',    '5': 'finance','6': 'goals',  '7': 'weekly',
 };
 
-const pageVariants = {
-  initial: { opacity: 0, y: 8 },
-  animate: { opacity: 1, y: 0 },
-  exit:    { opacity: 0, y: -8 },
-};
+const pageVariants  = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -8 } };
 const pageTransition = { duration: 0.2, ease: 'easeOut' };
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 function AppShell() {
-  const { activeTab, setActiveTab } = useApp();
+  const { activeTab, setActiveTab } = useNav();   // ← NavContext (não muda com dados)
   const [cmdOpen, setCmdOpen] = useState(false);
 
   const View = VIEWS[activeTab] || Dashboard;
@@ -165,12 +95,11 @@ function AppShell() {
   );
 }
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 function LoadingScreen() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-6"
-      style={{ background: 'var(--bg)' }}>
+    <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: 'var(--bg)' }}>
       <motion.div
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -185,42 +114,40 @@ function LoadingScreen() {
         >
           <Leaf size={26} style={{ color: 'var(--on-blue)' }} strokeWidth={1.8} />
         </motion.div>
-        <p className="text-sm" style={{ color: 'var(--text-3)' }}>Verificando sessão...</p>
+        <p className="text-sm" style={{ color: 'var(--text-4)' }}>Verificando sessão...</p>
       </motion.div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 function AuthenticatedApp({ user }) {
   const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
-    // Mostra a tela de boas-vindas apenas em logins novos (não em reload)
     const sessionKey = `lf_welcomed_${user.username}`;
-    const alreadyWelcomed = sessionStorage.getItem(sessionKey);
-    if (!alreadyWelcomed) {
+    if (!sessionStorage.getItem(sessionKey)) {
       setShowWelcome(true);
       sessionStorage.setItem(sessionKey, '1');
     }
   }, [user.username]);
 
   return (
-    <AppProvider key={user.username}>
-      {showWelcome && (
-        <WelcomeScreen
-          user={user}
-          onDone={() => setShowWelcome(false)}
-        />
-      )}
-      <AppShell />
-      <SaveToast />
-    </AppProvider>
+    // NavProvider wraps tudo — BottomNav e Sidebar assinam APENAS este contexto
+    // AppProvider é o contexto de dados — só componentes de dados re-renderizam
+    <NavProvider>
+      <AppProvider key={user.username}>
+        {showWelcome && (
+          <WelcomeScreen user={user} onDone={() => setShowWelcome(false)} />
+        )}
+        <AppShell />
+      </AppProvider>
+    </NavProvider>
   );
 }
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 export default function App() {
   const { currentUser, loading } = useAuth();
