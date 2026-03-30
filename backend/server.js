@@ -1,5 +1,5 @@
 // ============================================================
-//  server.js — LifeFlow Backend
+//  server.js — LifeFlow Backend v4
 //  Node.js + Express + JWT + bcryptjs + SQLite (better-sqlite3)
 //  Porta: 3001
 // ============================================================
@@ -19,13 +19,20 @@ const JWT_EXPIRY  = '7d';
 const SALT_ROUNDS = 10;
 const DB_PATH     = path.join(__dirname, 'lifeflow.db');
 
-// Rate limiting simples para login (sem dependências externas)
-const loginAttempts = new Map(); // username → { count, resetAt }
+const SEED_USERS = [
+  { username: 'tallis', password: '0724', role: 'admin', name: 'Tallis', avatar: 'T', color: '#5B8DEF' },
+  { username: 'yasmin', password: '1234', role: 'user',  name: 'Yasmin', avatar: 'Y', color: '#F0556A' },
+  { username: 'pedro',  password: '123',  role: 'user',  name: 'Pedro',  avatar: 'P', color: '#2DD4BF' },
+];
+
+// ── Rate limiting simples (sem deps extras) ──────────────────
+
+const loginAttempts = new Map();
 const MAX_ATTEMPTS  = 10;
-const WINDOW_MS     = 15 * 60 * 1000; // 15 minutos
+const WINDOW_MS     = 15 * 60 * 1000;
 
 function checkRateLimit(username) {
-  const now  = Date.now();
+  const now   = Date.now();
   const entry = loginAttempts.get(username);
   if (!entry || now > entry.resetAt) {
     loginAttempts.set(username, { count: 1, resetAt: now + WINDOW_MS });
@@ -36,11 +43,8 @@ function checkRateLimit(username) {
   return true;
 }
 
-function resetRateLimit(username) {
-  loginAttempts.delete(username);
-}
+function resetRateLimit(username) { loginAttempts.delete(username); }
 
-// Limpa entradas expiradas a cada 30 min
 setInterval(() => {
   const now = Date.now();
   for (const [k, v] of loginAttempts) {
@@ -48,22 +52,15 @@ setInterval(() => {
   }
 }, 30 * 60 * 1000);
 
-const SEED_USERS = [
-  { username: 'tallis', password: '0724', role: 'admin', name: 'Tallis', avatar: 'T', color: '#5B8DEF' },
-  { username: 'yasmin', password: '1234', role: 'user',  name: 'Yasmin', avatar: 'Y', color: '#F0556A' },
-  { username: 'pedro',  password: '123',  role: 'user',  name: 'Pedro',  avatar: 'P', color: '#2DD4BF' },
-];
-
 // ── Banco de dados SQLite ────────────────────────────────────
 
 const db = new Database(DB_PATH);
-
-// Otimizações de performance
 db.pragma('journal_mode = WAL');
 db.pragma('synchronous = NORMAL');
+db.pragma('foreign_keys = ON');
 
 function initDB() {
-  // Cria tabela de usuários
+  // ── Tabela users ─────────────────────────────────────────
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,11 +71,19 @@ function initDB() {
       avatar     TEXT    NOT NULL,
       color      TEXT    NOT NULL,
       last_login TEXT,
+      last_seen  TEXT,
       is_online  INTEGER NOT NULL DEFAULT 0
     )
   `);
 
-  // Cria tabela de dados por usuário
+  // Migração segura: adiciona last_seen se ainda não existir
+  const cols = db.prepare('PRAGMA table_info(users)').all();
+  if (!cols.find((c) => c.name === 'last_seen')) {
+    db.exec('ALTER TABLE users ADD COLUMN last_seen TEXT');
+    console.log('✓ Coluna last_seen adicionada');
+  }
+
+  // ── Tabela user_data ──────────────────────────────────────
   db.exec(`
     CREATE TABLE IF NOT EXISTS user_data (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,14 +100,24 @@ function initDB() {
     )
   `);
 
+  // ── Tabela feedbacks ──────────────────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS feedbacks (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL,
+      message    TEXT    NOT NULL,
+      created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+  `);
+
   console.log('✓ Tabelas criadas/verificadas');
 
-  // Insere usuários seed se não existirem
+  // ── Seed users ────────────────────────────────────────────
   const insertUser = db.prepare(`
     INSERT OR IGNORE INTO users (username, password, role, name, avatar, color)
     VALUES (@username, @password, @role, @name, @avatar, @color)
   `);
-
   const insertData = db.prepare(`
     INSERT OR IGNORE INTO user_data (user_id)
     SELECT id FROM users WHERE username = @username
@@ -110,8 +125,7 @@ function initDB() {
 
   const seedAll = db.transaction((seeds) => {
     for (const seed of seeds) {
-      const hash = bcrypt.hashSync(seed.password, SALT_ROUNDS);
-      insertUser.run({ ...seed, password: hash });
+      insertUser.run({ ...seed, password: bcrypt.hashSync(seed.password, SALT_ROUNDS) });
       insertData.run({ username: seed.username });
       console.log(`✓ Usuário verificado: ${seed.username}`);
     }
@@ -121,44 +135,35 @@ function initDB() {
   console.log(`✓ Banco SQLite pronto: ${DB_PATH}`);
 }
 
-// ── Helpers de dados ─────────────────────────────────────────
+// ── Prepared statements ──────────────────────────────────────
 
-const stmts = {
-  findUserByUsername: null,
-  findUserById:       null,
-  setOnline:          null,
-  setOffline:         null,
-  updateLastLogin:    null,
-  getAllUsers:        null,
-  getUserData:        null,
-  upsertUserData:     null,
-};
+const stmts = {};
 
 function prepareStatements() {
-  stmts.findUserByUsername = db.prepare(
-    'SELECT * FROM users WHERE username = ?'
-  );
-  stmts.findUserById = db.prepare(
-    'SELECT * FROM users WHERE id = ?'
-  );
-  stmts.setOnline = db.prepare(
-    'UPDATE users SET is_online = 1, last_login = ? WHERE id = ?'
+  stmts.findByUsername = db.prepare('SELECT * FROM users WHERE username = ?');
+  stmts.findById       = db.prepare('SELECT * FROM users WHERE id = ?');
+
+  stmts.setOnline  = db.prepare(
+    'UPDATE users SET is_online = 1, last_login = ?, last_seen = ? WHERE id = ?'
   );
   stmts.setOffline = db.prepare(
     'UPDATE users SET is_online = 0 WHERE id = ?'
   );
-  stmts.updateLastLogin = db.prepare(
-    'UPDATE users SET last_login = ? WHERE id = ?'
+  stmts.touchSeen  = db.prepare(
+    'UPDATE users SET is_online = 1, last_seen = ? WHERE id = ?'
   );
+
   stmts.getAllUsers = db.prepare(
-    'SELECT id, username, role, name, avatar, color, last_login, is_online FROM users'
+    'SELECT id, username, role, name, avatar, color, last_login, last_seen, is_online FROM users'
   );
   stmts.getUserData = db.prepare(
     'SELECT * FROM user_data WHERE user_id = ?'
   );
-  stmts.upsertUserData = db.prepare(`
-    INSERT INTO user_data (user_id, tasks, habits, agenda, notes, goals, study_items, transactions, updated_at)
-    VALUES (@user_id, @tasks, @habits, @agenda, @notes, @goals, @study_items, @transactions, datetime('now'))
+  stmts.upsertData = db.prepare(`
+    INSERT INTO user_data
+      (user_id, tasks, habits, agenda, notes, goals, study_items, transactions, updated_at)
+    VALUES
+      (@user_id, @tasks, @habits, @agenda, @notes, @goals, @study_items, @transactions, datetime('now'))
     ON CONFLICT(user_id) DO UPDATE SET
       tasks        = @tasks,
       habits       = @habits,
@@ -169,7 +174,20 @@ function prepareStatements() {
       transactions = @transactions,
       updated_at   = datetime('now')
   `);
+
+  stmts.insertFeedback = db.prepare(
+    'INSERT INTO feedbacks (user_id, message) VALUES (?, ?)'
+  );
+  stmts.getAllFeedbacks = db.prepare(`
+    SELECT f.id, f.message, f.created_at,
+           u.name AS user_name, u.username, u.avatar, u.color
+    FROM feedbacks f
+    JOIN users u ON u.id = f.user_id
+    ORDER BY f.created_at DESC
+  `);
 }
+
+// ── Helpers ──────────────────────────────────────────────────
 
 function parseUserData(row) {
   if (!row) return { tasks: [], habits: [], agenda: [], notes: [], goals: [], studyItems: [], transactions: [] };
@@ -184,132 +202,205 @@ function parseUserData(row) {
   };
 }
 
-function safeUser(user) {
-  const { password: _, ...safe } = user;
+function safeUser(u) {
+  const { password: _, ...safe } = u;
   safe.is_online = Boolean(safe.is_online);
   return safe;
 }
 
 // ── Middlewares ──────────────────────────────────────────────
 
-function authMiddleware(req, res, next) {
+function auth(req, res, next) {
   const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
+  if (!header?.startsWith('Bearer '))
     return res.status(401).json({ error: 'Token não enviado.' });
-  }
-  const token = header.split(' ')[1];
   try {
-    req.user = jwt.verify(token, JWT_SECRET);
+    req.user = jwt.verify(header.split(' ')[1], JWT_SECRET);
     next();
   } catch {
     return res.status(401).json({ error: 'Token inválido ou expirado.' });
   }
 }
 
-function adminMiddleware(req, res, next) {
-  if (req.user?.role !== 'admin') {
+function adminOnly(req, res, next) {
+  if (req.user?.role !== 'admin')
     return res.status(403).json({ error: 'Acesso negado.' });
-  }
   next();
 }
 
-// ── App Express ──────────────────────────────────────────────
+// ── Express app ──────────────────────────────────────────────
 
 const app = express();
-
 app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '5mb' }));
-
 app.use((req, _res, next) => {
   console.log(`${new Date().toLocaleTimeString('pt-BR')}  ${req.method} ${req.path}`);
   next();
 });
 
-// ── Rotas ────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+//  ROTAS PÚBLICAS
+// ════════════════════════════════════════════════════════════
 
-// GET / — health visual
-app.get('/', (_req, res) => {
-  res.json({ name: 'LifeFlow API', status: 'ok', version: '3.0.0' });
-});
+app.get('/', (_req, res) =>
+  res.json({ name: 'LifeFlow API', status: 'ok', version: '4.0.0' })
+);
 
-// GET /api/health
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString(), db: 'sqlite' });
-});
+app.get('/api/health', (_req, res) =>
+  res.json({ status: 'ok', time: new Date().toISOString(), db: 'sqlite' })
+);
 
-// POST /api/login
+// ── Login ────────────────────────────────────────────────────
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body || {};
 
-  if (!username || !password) {
+  if (!username || !password)
     return res.status(400).json({ error: 'Usuário e senha obrigatórios.' });
-  }
-
-  if (typeof username !== 'string' || username.length > 64) {
+  if (typeof username !== 'string' || username.length > 64)
     return res.status(400).json({ error: 'Usuário inválido.' });
-  }
-
-  if (typeof password !== 'string' || password.length > 128) {
+  if (typeof password !== 'string' || password.length > 128)
     return res.status(400).json({ error: 'Senha inválida.' });
-  }
 
-  const key = username.trim().toLowerCase();
+  const key  = username.trim().toLowerCase();
 
-  if (!checkRateLimit(key)) {
-    return res.status(429).json({ error: 'Muitas tentativas. Tente novamente em 15 minutos.' });
-  }
+  if (!checkRateLimit(key))
+    return res.status(429).json({ error: 'Muitas tentativas. Aguarde 15 minutos.' });
 
-  const user = stmts.findUserByUsername.get(key);
-
-  if (!user) {
+  const user = stmts.findByUsername.get(key);
+  if (!user)
     return res.status(401).json({ error: 'Usuário ou senha incorretos.' });
-  }
 
   const valid = await bcrypt.compare(password, user.password);
-  if (!valid) {
+  if (!valid)
     return res.status(401).json({ error: 'Usuário ou senha incorretos.' });
-  }
 
   resetRateLimit(key);
 
   const now = new Date().toISOString();
-  stmts.setOnline.run(now, user.id);
+  stmts.setOnline.run(now, now, user.id);
 
   const payload = {
-    id:       user.id,
-    username: user.username,
-    role:     user.role,
-    name:     user.name,
-    avatar:   user.avatar,
-    color:    user.color,
+    id: user.id, username: user.username, role: user.role,
+    name: user.name, avatar: user.avatar, color: user.color,
   };
 
-  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
-
-  return res.json({ token, user: payload });
+  return res.json({ token: jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY }), user: payload });
 });
 
-// POST /api/logout
-app.post('/api/logout', authMiddleware, (req, res) => {
+// ════════════════════════════════════════════════════════════
+//  ROTAS AUTENTICADAS
+// ════════════════════════════════════════════════════════════
+
+// ── Sessão ───────────────────────────────────────────────────
+app.post('/api/logout', auth, (req, res) => {
   stmts.setOffline.run(req.user.id);
   return res.json({ ok: true });
 });
 
-// GET /api/me
-app.get('/api/me', authMiddleware, (req, res) => {
-  const user = stmts.findUserById.get(req.user.id);
+app.get('/api/me', auth, (req, res) => {
+  const user = stmts.findById.get(req.user.id);
   if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
   return res.json({ user: safeUser(user) });
 });
 
-// PATCH /api/heartbeat
-app.patch('/api/heartbeat', authMiddleware, (req, res) => {
-  stmts.setOnline.run(new Date().toISOString(), req.user.id);
+app.patch('/api/heartbeat', auth, (req, res) => {
+  stmts.touchSeen.run(new Date().toISOString(), req.user.id);
   return res.json({ ok: true });
 });
 
-// GET /api/users (admin)
-app.get('/api/users', authMiddleware, adminMiddleware, (_req, res) => {
+// ── Dados do usuário ─────────────────────────────────────────
+app.get('/api/data', auth, (req, res) => {
+  const row = stmts.getUserData.get(req.user.id);
+  return res.json({ data: parseUserData(row) });
+});
+
+app.post('/api/data', auth, (req, res) => {
+  const d = req.body?.data;
+  if (!d || typeof d !== 'object' || Array.isArray(d))
+    return res.status(400).json({ error: 'Dados inválidos.' });
+
+  for (const f of ['tasks', 'habits', 'agenda', 'notes', 'goals', 'studyItems', 'transactions']) {
+    if (d[f] !== undefined && !Array.isArray(d[f]))
+      return res.status(400).json({ error: `Campo "${f}" deve ser array.` });
+  }
+
+  stmts.upsertData.run({
+    user_id:      req.user.id,
+    tasks:        JSON.stringify(d.tasks        ?? []),
+    habits:       JSON.stringify(d.habits       ?? []),
+    agenda:       JSON.stringify(d.agenda       ?? []),
+    notes:        JSON.stringify(d.notes        ?? []),
+    goals:        JSON.stringify(d.goals        ?? []),
+    study_items:  JSON.stringify(d.studyItems   ?? []),
+    transactions: JSON.stringify(d.transactions ?? []),
+  });
+
+  return res.json({ ok: true });
+});
+
+// ── Alterar senha (PATCH — padrão REST) ──────────────────────
+app.patch('/api/change-password', auth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+
+  if (!currentPassword || !newPassword)
+    return res.status(400).json({ error: 'Senha atual e nova senha são obrigatórias.' });
+  if (typeof newPassword !== 'string' || newPassword.length < 3)
+    return res.status(400).json({ error: 'Nova senha deve ter pelo menos 3 caracteres.' });
+  if (newPassword.length > 128)
+    return res.status(400).json({ error: 'Nova senha muito longa.' });
+
+  const user = stmts.findById.get(req.user.id);
+  if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
+
+  const valid = await bcrypt.compare(currentPassword, user.password);
+  if (!valid) return res.status(401).json({ error: 'Senha atual incorreta.' });
+
+  const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hash, req.user.id);
+
+  return res.json({ ok: true });
+});
+
+// Alias POST para compatibilidade com código anterior
+app.post('/api/change-password', auth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (!currentPassword || !newPassword)
+    return res.status(400).json({ error: 'Senha atual e nova senha são obrigatórias.' });
+  if (typeof newPassword !== 'string' || newPassword.length < 3)
+    return res.status(400).json({ error: 'Nova senha deve ter pelo menos 3 caracteres.' });
+
+  const user = stmts.findById.get(req.user.id);
+  if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
+
+  const valid = await bcrypt.compare(currentPassword, user.password);
+  if (!valid) return res.status(401).json({ error: 'Senha atual incorreta.' });
+
+  const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hash, req.user.id);
+  return res.json({ ok: true });
+});
+
+// ── Feedback ─────────────────────────────────────────────────
+app.post('/api/feedback', auth, (req, res) => {
+  const { message } = req.body || {};
+
+  if (!message || typeof message !== 'string')
+    return res.status(400).json({ error: 'Mensagem é obrigatória.' });
+  if (message.trim().length < 3)
+    return res.status(400).json({ error: 'Mensagem muito curta.' });
+  if (message.length > 2000)
+    return res.status(400).json({ error: 'Mensagem muito longa (máx 2000 caracteres).' });
+
+  stmts.insertFeedback.run(req.user.id, message.trim());
+  return res.json({ ok: true });
+});
+
+// ════════════════════════════════════════════════════════════
+//  ROTAS ADMIN
+// ════════════════════════════════════════════════════════════
+
+// ── Lista de usuários ────────────────────────────────────────
+app.get('/api/users', auth, adminOnly, (_req, res) => {
   const users = stmts.getAllUsers.all().map((u) => ({
     ...u,
     is_online: Boolean(u.is_online),
@@ -317,34 +408,39 @@ app.get('/api/users', authMiddleware, adminMiddleware, (_req, res) => {
   return res.json({ users });
 });
 
-// GET /api/data
-app.get('/api/data', authMiddleware, (req, res) => {
-  const row  = stmts.getUserData.get(req.user.id);
-  const data = parseUserData(row);
-  return res.json({ data });
+// ── Atividade dos usuários ───────────────────────────────────
+app.get('/api/admin/activity', auth, adminOnly, (_req, res) => {
+  const users = stmts.getAllUsers.all().map((u) => ({
+    id:         u.id,
+    username:   u.username,
+    name:       u.name,
+    avatar:     u.avatar,
+    color:      u.color,
+    role:       u.role,
+    is_online:  Boolean(u.is_online),
+    last_login: u.last_login,
+    last_seen:  u.last_seen,
+  }));
+  return res.json({ users });
 });
 
-// POST /api/change-password
-app.post('/api/change-password', authMiddleware, async (req, res) => {
-  const { currentPassword, newPassword } = req.body || {};
+// ── Feedbacks (lista para admin) ─────────────────────────────
+app.get('/api/feedbacks', auth, adminOnly, (_req, res) => {
+  const feedbacks = stmts.getAllFeedbacks.all();
+  return res.json({ feedbacks });
+});
 
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ error: 'Senha atual e nova senha são obrigatórias.' });
-  }
-  if (typeof newPassword !== 'string' || newPassword.length < 3) {
+// ── Reset de senha (admin — sem precisar da senha atual) ──────
+app.patch('/api/reset-password', auth, adminOnly, async (req, res) => {
+  const { username, newPassword } = req.body || {};
+
+  if (!username || !newPassword)
+    return res.status(400).json({ error: 'username e newPassword são obrigatórios.' });
+  if (typeof newPassword !== 'string' || newPassword.length < 3)
     return res.status(400).json({ error: 'Nova senha deve ter pelo menos 3 caracteres.' });
-  }
-  if (newPassword.length > 128) {
-    return res.status(400).json({ error: 'Nova senha muito longa.' });
-  }
 
-  const user = stmts.findUserById.get(req.user.id);
+  const user = stmts.findByUsername.get(username.trim().toLowerCase());
   if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
-
-  const valid = await bcrypt.compare(currentPassword, user.password);
-  if (!valid) {
-    return res.status(401).json({ error: 'Senha atual incorreta.' });
-  }
 
   const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
   db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hash, user.id);
@@ -352,42 +448,12 @@ app.post('/api/change-password', authMiddleware, async (req, res) => {
   return res.json({ ok: true });
 });
 
-// POST /api/data
-app.post('/api/data', authMiddleware, (req, res) => {
-  const newData = req.body?.data;
+// ════════════════════════════════════════════════════════════
+//  ERROR HANDLERS
+// ════════════════════════════════════════════════════════════
 
-  if (!newData || typeof newData !== 'object' || Array.isArray(newData)) {
-    return res.status(400).json({ error: 'Dados inválidos.' });
-  }
+app.use((_req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
 
-  const ARRAY_FIELDS = ['tasks', 'habits', 'agenda', 'notes', 'goals', 'studyItems', 'transactions'];
-  for (const field of ARRAY_FIELDS) {
-    const val = newData[field];
-    if (val !== undefined && !Array.isArray(val)) {
-      return res.status(400).json({ error: `Campo "${field}" deve ser um array.` });
-    }
-  }
-
-  stmts.upsertUserData.run({
-    user_id:      req.user.id,
-    tasks:        JSON.stringify(newData.tasks        ?? []),
-    habits:       JSON.stringify(newData.habits       ?? []),
-    agenda:       JSON.stringify(newData.agenda       ?? []),
-    notes:        JSON.stringify(newData.notes        ?? []),
-    goals:        JSON.stringify(newData.goals        ?? []),
-    study_items:  JSON.stringify(newData.studyItems   ?? []),
-    transactions: JSON.stringify(newData.transactions ?? []),
-  });
-
-  return res.json({ ok: true });
-});
-
-// ── 404 ──────────────────────────────────────────────────────
-app.use((_req, res) => {
-  res.status(404).json({ error: 'Rota não encontrada.' });
-});
-
-// ── Error handler global ──────────────────────────────────────
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
   console.error('[ERROR]', err.message || err);
@@ -395,26 +461,33 @@ app.use((err, _req, res, _next) => {
   res.status(status).json({ error: err.message || 'Erro interno do servidor.' });
 });
 
-// ── Start ────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+//  START
+// ════════════════════════════════════════════════════════════
 
 initDB();
 prepareStatements();
 
 app.listen(PORT, () => {
   console.log('');
-  console.log('🚀 LifeFlow Backend v3 rodando!');
-  console.log(`   URL: http://localhost:${PORT}`);
+  console.log('🚀 LifeFlow Backend v4');
+  console.log(`   http://localhost:${PORT}`);
   console.log('');
   console.log('📋 Endpoints:');
-  console.log('   POST  /api/login');
-  console.log('   POST  /api/logout');
-  console.log('   GET   /api/me');
-  console.log('   PATCH /api/heartbeat');
-  console.log('   GET   /api/users  (admin)');
-  console.log('   GET   /api/data');
-  console.log('   POST  /api/data');
+  console.log('   POST   /api/login');
+  console.log('   POST   /api/logout');
+  console.log('   GET    /api/me');
+  console.log('   PATCH  /api/heartbeat');
+  console.log('   GET    /api/data');
+  console.log('   POST   /api/data');
+  console.log('   PATCH  /api/change-password');
+  console.log('   POST   /api/feedback');
+  console.log('   GET    /api/users           (admin)');
+  console.log('   GET    /api/admin/activity  (admin)');
+  console.log('   GET    /api/feedbacks       (admin)');
+  console.log('   PATCH  /api/reset-password  (admin)');
   console.log('');
-  console.log('👤 Usuários:');
+  console.log('👤 Usuários seed:');
   console.log('   tallis / 0724  (admin)');
   console.log('   yasmin / 1234');
   console.log('   pedro  / 123');

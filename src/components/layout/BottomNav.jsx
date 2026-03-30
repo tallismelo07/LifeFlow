@@ -7,7 +7,7 @@ import { useApp  } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard, CheckSquare, Flame, Calendar, StickyNote,
-  Wallet, Target, BookOpen, Timer, CalendarCheck, Shield, MoreHorizontal,
+  Wallet, Target, BookOpen, Timer, CalendarCheck, Shield, MoreHorizontal, Lightbulb,
 } from 'lucide-react';
 
 const LEFT_ITEMS = [
@@ -90,8 +90,8 @@ export default function BottomNav() {
   const badges       = { tasks: pendingTasks || null, habits: habitsLeft || null };
 
   const allMore = isAdmin
-    ? [...MORE_ITEMS, { id: 'admin', label: 'Admin', icon: Shield }]
-    : MORE_ITEMS;
+    ? [...MORE_ITEMS, { id: 'admin',    label: 'Admin',    icon: Shield }]
+    : [...MORE_ITEMS, { id: 'feedback', label: 'Sugestões', icon: Lightbulb }];
 
   const isMoreActive = allMore.some((i) => i.id === activeTab);
 

@@ -4,7 +4,7 @@ import { useApp }  from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard, CheckSquare, Flame, Wallet, BookOpen,
-  Zap, Timer, StickyNote, Target, X, CalendarCheck, Calendar, Shield,
+  Zap, Timer, StickyNote, Target, X, CalendarCheck, Calendar, Shield, Lightbulb,
 } from 'lucide-react';
 
 const getNavItems = (isAdmin) => [
@@ -18,7 +18,8 @@ const getNavItems = (isAdmin) => [
   { id: 'notes',     label: 'Notas',           icon: StickyNote,      shortcut: '8' },
   { id: 'pomodoro',  label: 'Pomodoro',        icon: Timer,           shortcut: '9' },
   { id: 'weekly',    label: 'Revisão Semanal', icon: CalendarCheck,   shortcut: '0' },
-  ...(isAdmin ? [{ id: 'admin', label: 'Admin', icon: Shield, shortcut: 'A', isAdmin: true }] : []),
+  ...(!isAdmin ? [{ id: 'feedback', label: 'Sugestões', icon: Lightbulb, shortcut: 'F' }] : []),
+  ...(isAdmin  ? [{ id: 'admin',    label: 'Admin',     icon: Shield,    shortcut: 'A', isAdmin: true }] : []),
 ];
 
 function NavItem({ item, isActive, onClick, badge }) {

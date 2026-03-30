@@ -22,6 +22,7 @@ import Weekly     from './components/weekly/Weekly';
 import Agenda     from './components/agenda/Agenda';
 import AdminPanel from './components/admin/AdminPanel';
 
+import Feedback    from './components/feedback/Feedback';
 import CommandPalette from './components/ui/CommandPalette';
 import { Zap } from 'lucide-react';
 
@@ -39,6 +40,7 @@ const VIEWS = {
   pomodoro:  Pomodoro,
   weekly:    Weekly,
   admin:     AdminPanel,
+  feedback:  Feedback,
 };
 
 const SHORTCUTS = {

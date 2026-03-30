@@ -22,6 +22,7 @@ const TITLES = {
   pomodoro:  { title: 'Pomodoro',         sub: 'Timer de foco' },
   weekly:    { title: 'Revisão Semanal',  sub: 'Reflita e planeje' },
   admin:     { title: 'Painel Admin',     sub: 'Gestão de usuários' },
+  feedback:  { title: 'Sugestões',        sub: 'Envie ideias e feedback' },
 };
 
 // ── Modal alterar senha ──────────────────────────────────────────────────────

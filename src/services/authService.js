@@ -71,7 +71,31 @@ export async function getDataRequest() {
 
 // 🔑 ALTERAR SENHA
 export async function changePasswordRequest(currentPassword, newPassword) {
-  const { data } = await api.post('/change-password', { currentPassword, newPassword });
+  const { data } = await api.patch('/change-password', { currentPassword, newPassword });
+  return data;
+}
+
+// 💡 FEEDBACK
+export async function sendFeedbackRequest(message) {
+  const { data } = await api.post('/feedback', { message });
+  return data;
+}
+
+// 📋 FEEDBACKS (admin)
+export async function getFeedbacksRequest() {
+  const { data } = await api.get('/feedbacks');
+  return data.feedbacks;
+}
+
+// 📊 ATIVIDADE (admin)
+export async function getActivityRequest() {
+  const { data } = await api.get('/admin/activity');
+  return data.users;
+}
+
+// 🔓 RESET DE SENHA (admin)
+export async function resetPasswordRequest(username, newPassword) {
+  const { data } = await api.patch('/reset-password', { username, newPassword });
   return data;
 }
 
