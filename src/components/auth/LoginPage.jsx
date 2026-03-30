@@ -449,7 +449,7 @@ export default function LoginPage() {
                 transition={{ delay: 0.5 }}
                 style={{ color: 'var(--text-4)' }}
               >
-                LifeFlow v3 · Autenticação segura
+                LifeFlow v5 · Autenticação segura
               </motion.p>
             </motion.div>
           ) : (
