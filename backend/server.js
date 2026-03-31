@@ -421,8 +421,10 @@ app.post('/api/data', auth, (req, res) => {
   const currentData  = parseUserData(existing);
   const currentTotal = countItems(currentData);
 
-  // Proteção anti-wipe: não sobrescreve dados existentes com payload vazio
-  if (incomingTotal === 0 && currentTotal > 0) {
+  // Proteção anti-wipe: bloqueia apenas quando parece race condition de boot
+  // (0 itens chegando contra banco com dados substanciais)
+  // NÃO bloqueia quando o usuário deletou legitimamente todos os seus itens (currentTotal pequeno)
+  if (incomingTotal === 0 && currentTotal >= 5) {
     logDB('warn',
       `Anti-wipe: recusado (0 itens recebidos, banco tem ${currentTotal}). user=${req.user.username}`,
       'data', req.user.id

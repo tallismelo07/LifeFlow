@@ -87,6 +87,8 @@ export function AppProvider({ children }) {
   const pendingChanges  = useRef(false);
   const lastServerTs    = useRef(null);
   const initialSyncDone = useRef(false);
+  // Bloqueia saves antes do initialSync completar — evita sobrescrever servidor com estado vazio
+  const dataLoaded      = useRef(false);
 
   useEffect(() => { dataRef.current = data; }, [data]);
 
@@ -99,6 +101,7 @@ export function AppProvider({ children }) {
     initialSyncDone.current = false;
 
     const local = loadLocal(username);
+    dataLoaded.current = false;
     setData(local);
     dataRef.current = local;
   }, [username]);
@@ -117,7 +120,10 @@ export function AppProvider({ children }) {
 
     getDataRequest()
       .then((serverData) => {
-        if (!serverData) return;
+        if (!serverData) {
+          dataLoaded.current = true;
+          return;
+        }
 
         const serverTotal = countItems(serverData);
         const localData   = loadLocal(username);
@@ -131,29 +137,36 @@ export function AppProvider({ children }) {
           saveWithRetry(localData).then(({ ok }) => {
             if (ok) { lastServerTs.current = new Date().toISOString(); pendingChanges.current = false; }
           });
+          dataLoaded.current = true;
           return;
         }
 
         if (serverTotal === 0 && localTotal === 0) {
-          // Caso D: novo usuário
+          // Caso D: novo usuário — sem dados em lugar nenhum
           lastServerTs.current = serverData.updated_at || null;
+          dataLoaded.current = true;
           return;
         }
 
         if (pendingChanges.current) {
-          // Caso C: edições locais em curso, não sobrescreve
+          // Caso C: usuário editou durante o carregamento — mantém local e sobe
+          dataLoaded.current = true;
           return;
         }
 
-        // Caso B: servidor tem dados → aplica
+        // Caso B: servidor tem dados → aplica no estado
         const { updated_at: _, ...rest } = serverData;
         const merged = { ...emptyData(), ...rest };
         lastServerTs.current = serverData.updated_at || null;
 
         setData(merged);
         saveLocal(username, merged);
+        dataLoaded.current = true;
       })
-      .catch((err) => console.warn('[AppContext] Offline — usando localStorage:', err.message));
+      .catch((err) => {
+        dataLoaded.current = true; // offline: usa localStorage, permite saves futuros
+        console.warn('[AppContext] Offline — usando localStorage:', err.message);
+      });
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
@@ -200,6 +213,9 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
     if (!username) return;
+    // Bloqueia save se o initialSync ainda não carregou E não há mudanças do usuário
+    // Evita sobrescrever o servidor com estado vazio durante o boot
+    if (!dataLoaded.current && !pendingChanges.current) return;
 
     if (saveTimer.current) clearTimeout(saveTimer.current);
 
@@ -276,7 +292,8 @@ export function AppProvider({ children }) {
   const totalIncome       = transactions.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense      = transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const balance           = totalIncome - totalExpense;
-  const addTransaction    = (tx) => update('transactions', (a) => [{ ...tx, id: genId(), date: new Date().toISOString() }, ...a]);
+  // Preserva tx.date (data selecionada pelo usuário) — não sobrescreve com timestamp atual
+  const addTransaction    = (tx) => update('transactions', (a) => [{ ...tx, id: genId(), createdAt: new Date().toISOString(), date: tx.date || new Date().toISOString().split('T')[0] }, ...a]);
   const deleteTransaction = (id) => update('transactions', (a) => a.filter((t) => t.id !== id));
 
   const studyItems        = data.studyItems || [];
