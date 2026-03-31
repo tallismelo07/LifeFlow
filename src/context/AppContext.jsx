@@ -270,6 +270,7 @@ export function AppProvider({ children }) {
 
   const habits            = data.habits || [];
   const addHabit          = (h)  => update('habits', (a) => [...a, { ...h, id: genId(), streak: 0, completedDates: [] }]);
+  const updateHabit       = (id, u) => update('habits', (a) => a.map((h) => h.id === id ? { ...h, ...u } : h));
   const deleteHabit       = (id) => update('habits', (a) => a.filter((h) => h.id !== id));
   const toggleHabit       = (id) => {
     const todayStr = today();
@@ -324,7 +325,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       tasks,        addTask,    updateTask,    deleteTask,    toggleTask,
-      habits,       addHabit,   deleteHabit,   toggleHabit,
+      habits,       addHabit,   updateHabit,   deleteHabit,   toggleHabit,
       transactions, totalIncome, totalExpense, balance, addTransaction, deleteTransaction,
       studyItems,   addStudyItem, updateStudyItem, deleteStudyItem,
       notes,        addNote,    updateNote,    deleteNote,

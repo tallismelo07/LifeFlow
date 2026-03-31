@@ -406,12 +406,11 @@ app.post('/api/data', auth, (req, res) => {
     return res.status(400).json({ error: 'Campo "data" é obrigatório e deve ser objeto.' });
   }
 
-  // Valida que todos os campos enviados são arrays
-  for (const f of DATA_FIELDS) {
-    const key = f === 'studyItems' ? 'studyItems' : f;
-    if (incoming[key] !== undefined && !Array.isArray(incoming[key])) {
-      return res.status(400).json({ error: `Campo "${key}" deve ser array.` });
-    }
+  // Coerce cada campo para array — nunca rejeita, sempre sanitiza
+  function safeArr(val, fallback = []) {
+    if (!Array.isArray(val)) return fallback;
+    // Remove itens nulos/não-objeto dentro do array
+    return val.filter((item) => item !== null && item !== undefined);
   }
 
   const incomingTotal = countItems(incoming);
@@ -434,14 +433,14 @@ app.post('/api/data', auth, (req, res) => {
 
   const toSave = {
     user_id:      req.user.id,
-    tasks:        JSON.stringify(incoming.tasks        ?? currentData.tasks),
-    habits:       JSON.stringify(incoming.habits       ?? currentData.habits),
-    agenda:       JSON.stringify(incoming.agenda       ?? currentData.agenda),
-    notes:        JSON.stringify(incoming.notes        ?? currentData.notes),
-    goals:        JSON.stringify(incoming.goals        ?? currentData.goals),
-    study_items:  JSON.stringify(incoming.studyItems   ?? currentData.studyItems),
-    transactions: JSON.stringify(incoming.transactions ?? currentData.transactions),
-    cards:        JSON.stringify(incoming.cards        ?? currentData.cards),
+    tasks:        JSON.stringify(safeArr(incoming.tasks,        currentData.tasks)),
+    habits:       JSON.stringify(safeArr(incoming.habits,       currentData.habits)),
+    agenda:       JSON.stringify(safeArr(incoming.agenda,       currentData.agenda)),
+    notes:        JSON.stringify(safeArr(incoming.notes,        currentData.notes)),
+    goals:        JSON.stringify(safeArr(incoming.goals,        currentData.goals)),
+    study_items:  JSON.stringify(safeArr(incoming.studyItems,   currentData.studyItems)),
+    transactions: JSON.stringify(safeArr(incoming.transactions, currentData.transactions)),
+    cards:        JSON.stringify(safeArr(incoming.cards,        currentData.cards)),
     updated_at:   nowISO(),
   };
 
