@@ -1,23 +1,23 @@
 // ============================================================
-//  server.js — LifeFlow Backend v7
-//  Node.js + Express + JWT + bcryptjs + SQLite (better-sqlite3)
+//  server.js — LifeFlow Backend v8
+//  Node.js + Express + JWT + bcryptjs + SQLite + PDFKit
 // ============================================================
 
-const express  = require('express');
-const bcrypt   = require('bcryptjs');
-const jwt      = require('jsonwebtoken');
-const cors     = require('cors');
-const path     = require('path');
-const Database = require('better-sqlite3');
+const express    = require('express');
+const bcrypt     = require('bcryptjs');
+const jwt        = require('jsonwebtoken');
+const cors       = require('cors');
+const path       = require('path');
+const Database   = require('better-sqlite3');
+const PDFDocument = require('pdfkit');
 
-// ── Configurações ────────────────────────────────────────────
+// ── Configurações ─────────────────────────────────────────────
 
 const PORT        = process.env.PORT || 3001;
 const JWT_SECRET  = process.env.JWT_SECRET || 'lifeflow-secret-2024-mude-em-producao';
 const JWT_EXPIRY  = '7d';
 const SALT_ROUNDS = 10;
-
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'lifeflow.db');
+const DB_PATH     = process.env.DB_PATH || path.join(__dirname, 'lifeflow.db');
 
 const SEED_USERS = [
   { username: 'tallis', password: '0724', role: 'admin', name: 'Tallis', avatar: 'T', color: '#5B8DEF' },
@@ -25,7 +25,7 @@ const SEED_USERS = [
   { username: 'pedro',  password: '123',  role: 'user',  name: 'Pedro',  avatar: 'P', color: '#2DD4BF' },
 ];
 
-// ── Rate limiting simples ────────────────────────────────────
+// ── Rate limiting ─────────────────────────────────────────────
 
 const loginAttempts = new Map();
 const MAX_ATTEMPTS  = 10;
@@ -42,33 +42,29 @@ function checkRateLimit(key) {
   entry.count++;
   return true;
 }
-
 function resetRateLimit(key) { loginAttempts.delete(key); }
-
 setInterval(() => {
   const now = Date.now();
-  for (const [k, v] of loginAttempts) {
-    if (now > v.resetAt) loginAttempts.delete(k);
-  }
+  for (const [k, v] of loginAttempts) if (now > v.resetAt) loginAttempts.delete(k);
 }, 30 * 60 * 1000);
 
-// ── Banco de dados SQLite ────────────────────────────────────
+// ── Banco de dados ────────────────────────────────────────────
 
 const db = new Database(DB_PATH);
 
-// Performance e durabilidade
-db.pragma('journal_mode = WAL');       // Write-Ahead Log: leituras não bloqueiam escritas
-db.pragma('synchronous  = NORMAL');    // NORMAL é seguro com WAL; FULL é mais lento sem benefício real
-db.pragma('foreign_keys = ON');
-db.pragma('cache_size   = -32000');    // 32 MB de cache em memória
-db.pragma('temp_store   = MEMORY');    // tabelas temporárias na RAM
-db.pragma('mmap_size    = 268435456'); // 256 MB mmap para leitura rápida
+db.pragma('journal_mode  = WAL');
+db.pragma('synchronous   = NORMAL');
+db.pragma('foreign_keys  = ON');
+db.pragma('cache_size    = -32000');   // 32 MB cache
+db.pragma('temp_store    = MEMORY');
+db.pragma('mmap_size     = 268435456'); // 256 MB mmap
 db.pragma('wal_autocheckpoint = 1000');
 
-// ── Timestamp helper — SEMPRE ISO8601 UTC com sufixo Z ───────
-function nowISO() { return new Date().toISOString(); }
+// ── Helpers ───────────────────────────────────────────────────
 
-// ── Log no banco (helper) ────────────────────────────────────
+const nowISO = () => new Date().toISOString();
+
+// ── Logger no banco ───────────────────────────────────────────
 
 let _logStmt = null;
 function logDB(level, message, source = 'system', userId = null) {
@@ -78,14 +74,15 @@ function logDB(level, message, source = 'system', userId = null) {
         'INSERT INTO logs (level, message, source, user_id, created_at) VALUES (?, ?, ?, ?, ?)'
       );
     }
-    _logStmt.run(level, String(message).slice(0, 500), source, userId || null, nowISO());
+    const msg = String(message).slice(0, 1000);
+    _logStmt.run(level, msg, source, userId || null, nowISO());
+    console.log(`[${level.toUpperCase()}] [${source}] ${msg}`);
   } catch { /* nunca falha */ }
 }
 
-// ── Init do banco ────────────────────────────────────────────
+// ── Init banco ────────────────────────────────────────────────
 
 function initDB() {
-  // ── Tabelas ─────────────────────────────────────────────────
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -140,34 +137,28 @@ function initDB() {
     )
   `);
 
-  // ── Índices para melhor performance ─────────────────────────
+  // Índices
   db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_user_data_user_id  ON user_data (user_id);
-    CREATE INDEX IF NOT EXISTS idx_feedbacks_user_id  ON feedbacks (user_id);
-    CREATE INDEX IF NOT EXISTS idx_feedbacks_created  ON feedbacks (created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_logs_created       ON logs (created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_logs_user_id       ON logs (user_id);
-    CREATE INDEX IF NOT EXISTS idx_logs_level         ON logs (level);
+    CREATE INDEX IF NOT EXISTS idx_user_data_user_id ON user_data (user_id);
+    CREATE INDEX IF NOT EXISTS idx_feedbacks_user_id ON feedbacks (user_id);
+    CREATE INDEX IF NOT EXISTS idx_feedbacks_created ON feedbacks (created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_logs_created      ON logs (created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_logs_user_id      ON logs (user_id);
+    CREATE INDEX IF NOT EXISTS idx_logs_level        ON logs (level);
   `);
 
-  // ── Migrações — adiciona colunas que possam estar faltando ──
+  // Migrações
   const userCols     = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
   const userDataCols = db.prepare('PRAGMA table_info(user_data)').all().map((c) => c.name);
 
-  if (!userCols.includes('email')) {
+  if (!userCols.includes('email'))
     db.exec("ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''");
-    console.log('✓ Migração: coluna users.email adicionada');
-  }
-  if (!userDataCols.includes('cards')) {
+  if (!userDataCols.includes('cards'))
     db.exec("ALTER TABLE user_data ADD COLUMN cards TEXT NOT NULL DEFAULT '[]'");
-    console.log('✓ Migração: coluna user_data.cards adicionada');
-  }
-  if (!userDataCols.includes('notes')) {
+  if (!userDataCols.includes('notes'))
     db.exec("ALTER TABLE user_data ADD COLUMN notes TEXT NOT NULL DEFAULT '[]'");
-    console.log('✓ Migração: coluna user_data.notes adicionada');
-  }
 
-  // ── Seed dos usuários iniciais ───────────────────────────────
+  // Seed
   const insertUser = db.prepare(`
     INSERT OR IGNORE INTO users (username, password, role, name, avatar, color)
     VALUES (@username, @password, @role, @name, @avatar, @color)
@@ -176,19 +167,17 @@ function initDB() {
     INSERT OR IGNORE INTO user_data (user_id, updated_at)
     SELECT id, '' FROM users WHERE username = @username
   `);
-
   const seedTx = db.transaction((seeds) => {
     for (const s of seeds) {
       insertUser.run({ ...s, password: bcrypt.hashSync(s.password, SALT_ROUNDS) });
       ensureData.run({ username: s.username });
     }
   });
-
   seedTx(SEED_USERS);
   console.log(`✓ Banco pronto: ${DB_PATH}`);
 }
 
-// ── Prepared statements ──────────────────────────────────────
+// ── Prepared statements ───────────────────────────────────────
 
 const stmts = {};
 
@@ -224,30 +213,46 @@ function prepareStatements() {
   stmts.getAllFeedbacks = db.prepare(`
     SELECT f.id, f.message, f.created_at,
            u.name AS user_name, u.username, u.avatar, u.color
-    FROM feedbacks f
-    JOIN users u ON u.id = f.user_id
-    ORDER BY f.created_at DESC
-    LIMIT 500
+    FROM feedbacks f JOIN users u ON u.id = f.user_id
+    ORDER BY f.created_at DESC LIMIT 500
   `);
   stmts.getLogs = db.prepare(`
     SELECT l.id, l.level, l.message, l.source, l.created_at, u.username
-    FROM logs l
-    LEFT JOIN users u ON u.id = l.user_id
-    ORDER BY l.created_at DESC
-    LIMIT ?
+    FROM logs l LEFT JOIN users u ON u.id = l.user_id
+    ORDER BY l.created_at DESC LIMIT ?
   `);
 }
 
-// ── Helpers ──────────────────────────────────────────────────
+// ── JSON helpers ──────────────────────────────────────────────
 
-const DATA_FIELDS = ['tasks', 'habits', 'agenda', 'notes', 'goals', 'studyItems', 'transactions', 'cards'];
+function safeJSON(str, fallback) {
+  if (!str) return fallback;
+  try {
+    const parsed = JSON.parse(str);
+    return Array.isArray(parsed) ? parsed : fallback;
+  } catch { return fallback; }
+}
+
+// ── DATA_FIELDS: mapeamento frontend ↔ coluna SQL ─────────────
+const FIELD_MAP = [
+  { front: 'tasks',        col: 'tasks'        },
+  { front: 'habits',       col: 'habits'        },
+  { front: 'agenda',       col: 'agenda'        },
+  { front: 'notes',        col: 'notes'         },
+  { front: 'goals',        col: 'goals'         },
+  { front: 'studyItems',   col: 'study_items'   },
+  { front: 'transactions', col: 'transactions'  },
+  { front: 'cards',        col: 'cards'         },
+];
 
 function parseUserData(row) {
-  if (!row) return {
-    tasks: [], habits: [], agenda: [], notes: [],
-    goals: [], studyItems: [], transactions: [], cards: [],
-    updated_at: null,
-  };
+  if (!row) {
+    return {
+      tasks: [], habits: [], agenda: [], notes: [],
+      goals: [], studyItems: [], transactions: [], cards: [],
+      updated_at: null,
+    };
+  }
   return {
     tasks:        safeJSON(row.tasks,        []),
     habits:       safeJSON(row.habits,       []),
@@ -261,13 +266,58 @@ function parseUserData(row) {
   };
 }
 
-function safeJSON(str, fallback) {
-  if (!str) return fallback;
-  try { return JSON.parse(str); } catch { return fallback; }
+function countItems(data) {
+  return FIELD_MAP.reduce((n, { front }) => n + ((data[front] || []).length), 0);
 }
 
-function countItems(data) {
-  return DATA_FIELDS.reduce((n, k) => n + ((data[k] || []).length), 0);
+// ── Merge inteligente por campo ───────────────────────────────
+//
+// Regra por campo:
+//   - incoming[f] undefined       → manter current[f] (campo não enviado)
+//   - incoming[f] vazio + current >= FIELD_WIPE_THRESHOLD → manter current (proteção)
+//   - caso contrário              → usar incoming[f] (dado legítimo do usuário)
+//
+// Isso protege contra: race condition de boot, campos zerados por engano.
+// NÃO bloqueia: usuário que realmente apagou todos os itens de uma seção.
+
+const FIELD_WIPE_THRESHOLD = 3; // protege campos com >= 3 itens
+
+function mergeData(incoming, current) {
+  const merged = {};
+  const report = [];
+
+  for (const { front } of FIELD_MAP) {
+    const inc = incoming[front];
+    const cur = current[front] || [];
+
+    if (inc === undefined || inc === null) {
+      // Campo não enviado → manter atual
+      merged[front] = cur;
+      continue;
+    }
+
+    if (!Array.isArray(inc)) {
+      // Valor corrompido → manter atual e logar
+      merged[front] = cur;
+      report.push(`${front}: valor inválido, mantendo ${cur.length} itens`);
+      continue;
+    }
+
+    if (inc.length === 0 && cur.length >= FIELD_WIPE_THRESHOLD) {
+      // Campo vazio suspeito → manter atual
+      merged[front] = cur;
+      report.push(`${front}: recebeu [] com ${cur.length} itens no banco — mantendo atual`);
+      continue;
+    }
+
+    // Dado legítimo
+    merged[front] = inc;
+    if (inc.length !== cur.length) {
+      report.push(`${front}: ${cur.length} → ${inc.length}`);
+    }
+  }
+
+  return { merged, report };
 }
 
 function safeUser(u) {
@@ -276,7 +326,7 @@ function safeUser(u) {
   return safe;
 }
 
-// ── Middlewares ──────────────────────────────────────────────
+// ── Middlewares ───────────────────────────────────────────────
 
 function auth(req, res, next) {
   const h = req.headers.authorization;
@@ -286,7 +336,9 @@ function auth(req, res, next) {
     req.user = jwt.verify(h.split(' ')[1], JWT_SECRET);
     next();
   } catch (err) {
-    const msg = err.name === 'TokenExpiredError' ? 'Sessão expirada. Faça login novamente.' : 'Token inválido.';
+    const msg = err.name === 'TokenExpiredError'
+      ? 'Sessão expirada. Faça login novamente.'
+      : 'Token inválido.';
     return res.status(401).json({ error: msg });
   }
 }
@@ -297,7 +349,7 @@ function adminOnly(req, res, next) {
   next();
 }
 
-// ── Express app ──────────────────────────────────────────────
+// ── Express ───────────────────────────────────────────────────
 
 const app = express();
 
@@ -311,27 +363,27 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
-
 app.use((req, _res, next) => {
   console.log(`${new Date().toLocaleTimeString('pt-BR')}  ${req.method} ${req.path}`);
   next();
 });
 
-// ════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 //  ROTAS PÚBLICAS
-// ════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 
 app.get('/', (_req, res) =>
-  res.json({ name: 'LifeFlow API', status: 'ok', version: '7.0.0' })
+  res.json({ name: 'LifeFlow API', status: 'ok', version: '8.0.0' })
 );
 
 app.get('/api/health', (_req, res) =>
-  res.json({ status: 'ok', time: nowISO(), db: DB_PATH, version: '7.0.0' })
+  res.json({ status: 'ok', time: nowISO(), db: DB_PATH, version: '8.0.0' })
 );
 
-// ── Login ────────────────────────────────────────────────────
+// ── Login ─────────────────────────────────────────────────────
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body || {};
+
   if (!username || !password)
     return res.status(400).json({ error: 'Usuário e senha obrigatórios.' });
   if (typeof username !== 'string' || username.length > 64)
@@ -341,7 +393,7 @@ app.post('/api/login', async (req, res) => {
 
   const key = username.trim().toLowerCase();
   if (!checkRateLimit(key)) {
-    logDB('warn', `Rate limit atingido: ${key}`, 'auth');
+    logDB('warn', `Rate limit: ${key}`, 'auth');
     return res.status(429).json({ error: 'Muitas tentativas. Aguarde 15 minutos.' });
   }
 
@@ -366,12 +418,15 @@ app.post('/api/login', async (req, res) => {
     id: user.id, username: user.username, role: user.role,
     name: user.name, avatar: user.avatar, color: user.color,
   };
-  return res.json({ token: jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY }), user: payload });
+  return res.json({
+    token: jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY }),
+    user: payload,
+  });
 });
 
-// ════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 //  ROTAS AUTENTICADAS
-// ════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 
 app.post('/api/logout', auth, (req, res) => {
   stmts.setOffline.run(req.user.id);
@@ -391,62 +446,82 @@ app.patch('/api/heartbeat', auth, (req, res) => {
 });
 
 // ── GET /api/data ─────────────────────────────────────────────
+// Sempre lê do banco, nunca de cache.
 app.get('/api/data', auth, (req, res) => {
   const row  = stmts.getUserData.get(req.user.id);
   const data = parseUserData(row);
-  console.log(`[GET /api/data] user=${req.user.username} total=${countItems(data)} itens`);
+  const total = countItems(data);
+
+  logDB('info', `GET /api/data user=${req.user.username} total=${total}`, 'data', req.user.id);
+
+  // Cache-control: sem cache — dados devem vir sempre do servidor
+  res.set('Cache-Control', 'no-store');
   return res.json({ data });
 });
 
 // ── POST /api/data ────────────────────────────────────────────
+// Merge inteligente por campo — nunca substitui tudo de uma vez.
 app.post('/api/data', auth, (req, res) => {
   const incoming = req.body?.data;
 
   if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
+    logDB('warn', `POST /api/data: payload inválido`, 'data', req.user.id);
     return res.status(400).json({ error: 'Campo "data" é obrigatório e deve ser objeto.' });
   }
 
-  // Coerce cada campo para array — nunca rejeita, sempre sanitiza
-  function safeArr(val, fallback = []) {
-    if (!Array.isArray(val)) return fallback;
-    // Remove itens nulos/não-objeto dentro do array
-    return val.filter((item) => item !== null && item !== undefined);
-  }
-
+  // Busca estado atual do banco (fonte de verdade)
+  const existingRow  = stmts.getUserData.get(req.user.id);
+  const currentData  = parseUserData(existingRow);
+  const currentTotal = countItems(currentData);
   const incomingTotal = countItems(incoming);
 
-  // Busca o estado atual no banco
-  const existing     = stmts.getUserData.get(req.user.id);
-  const currentData  = parseUserData(existing);
-  const currentTotal = countItems(currentData);
-
-  // Proteção anti-wipe: bloqueia apenas quando parece race condition de boot
-  // (0 itens chegando contra banco com dados substanciais)
-  // NÃO bloqueia quando o usuário deletou legitimamente todos os seus itens (currentTotal pequeno)
+  // Proteção total: 0 itens chegando vs banco com dados substanciais
   if (incomingTotal === 0 && currentTotal >= 5) {
     logDB('warn',
-      `Anti-wipe: recusado (0 itens recebidos, banco tem ${currentTotal}). user=${req.user.username}`,
+      `Anti-wipe total: recebeu 0 itens, banco tem ${currentTotal}. user=${req.user.username}`,
       'data', req.user.id
     );
-    return res.json({ ok: true, protected: true });
+    return res.json({ ok: true, protected: true, reason: 'anti-wipe-total' });
+  }
+
+  // Merge inteligente por campo
+  const { merged, report } = mergeData(incoming, currentData);
+
+  if (report.length > 0) {
+    logDB('info',
+      `Merge fields [${req.user.username}]: ${report.join(' | ')}`,
+      'data', req.user.id
+    );
+  }
+
+  // Sanitiza: garante que todos os campos são arrays sem nulos internos
+  function sanitizeArr(arr) {
+    if (!Array.isArray(arr)) return [];
+    return arr.filter((item) => item !== null && item !== undefined && typeof item === 'object');
   }
 
   const toSave = {
     user_id:      req.user.id,
-    tasks:        JSON.stringify(safeArr(incoming.tasks,        currentData.tasks)),
-    habits:       JSON.stringify(safeArr(incoming.habits,       currentData.habits)),
-    agenda:       JSON.stringify(safeArr(incoming.agenda,       currentData.agenda)),
-    notes:        JSON.stringify(safeArr(incoming.notes,        currentData.notes)),
-    goals:        JSON.stringify(safeArr(incoming.goals,        currentData.goals)),
-    study_items:  JSON.stringify(safeArr(incoming.studyItems,   currentData.studyItems)),
-    transactions: JSON.stringify(safeArr(incoming.transactions, currentData.transactions)),
-    cards:        JSON.stringify(safeArr(incoming.cards,        currentData.cards)),
+    tasks:        JSON.stringify(sanitizeArr(merged.tasks)),
+    habits:       JSON.stringify(sanitizeArr(merged.habits)),
+    agenda:       JSON.stringify(sanitizeArr(merged.agenda)),
+    notes:        JSON.stringify(sanitizeArr(merged.notes)),
+    goals:        JSON.stringify(sanitizeArr(merged.goals)),
+    study_items:  JSON.stringify(sanitizeArr(merged.studyItems)),
+    transactions: JSON.stringify(sanitizeArr(merged.transactions)),
+    cards:        JSON.stringify(sanitizeArr(merged.cards)),
     updated_at:   nowISO(),
   };
 
   stmts.upsertData.run(toSave);
-  console.log(`[POST /api/data] ✓ user=${req.user.username} total=${incomingTotal} itens`);
-  return res.json({ ok: true, total: incomingTotal });
+
+  const savedTotal = countItems(merged);
+  logDB('info',
+    `POST /api/data ✓ user=${req.user.username} total=${savedTotal} (era ${currentTotal})`,
+    'data', req.user.id
+  );
+
+  return res.json({ ok: true, total: savedTotal });
 });
 
 // ── PATCH /api/user/profile ───────────────────────────────────
@@ -464,44 +539,68 @@ app.patch('/api/user/profile', auth, (req, res) => {
 });
 
 // ── PATCH /api/change-password ────────────────────────────────
+// Endpoint principal e único para troca de senha.
 app.patch('/api/change-password', auth, async (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
-  if (!currentPassword || !newPassword)
+
+  if (!currentPassword || !newPassword) {
     return res.status(400).json({ error: 'Senha atual e nova senha são obrigatórias.' });
-  if (typeof newPassword !== 'string' || newPassword.length < 3)
+  }
+  if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+    return res.status(400).json({ error: 'Formato inválido.' });
+  }
+  if (newPassword.length < 3) {
     return res.status(400).json({ error: 'Nova senha deve ter pelo menos 3 caracteres.' });
+  }
+  if (newPassword.length > 128) {
+    return res.status(400).json({ error: 'Nova senha muito longa.' });
+  }
 
+  // Busca usuário diretamente do banco (não confia no token para dados sensíveis)
   const user = stmts.findById.get(req.user.id);
-  if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
+  if (!user) {
+    logDB('error', `change-password: usuário ${req.user.id} não encontrado`, 'auth', req.user.id);
+    return res.status(404).json({ error: 'Usuário não encontrado.' });
+  }
 
+  // Valida senha atual
   const valid = await bcrypt.compare(currentPassword, user.password);
   if (!valid) {
-    logDB('warn', `Troca de senha falhou: ${req.user.username}`, 'auth', req.user.id);
+    logDB('warn', `change-password falhou (senha errada): ${user.username}`, 'auth', user.id);
     return res.status(401).json({ error: 'Senha atual incorreta.' });
   }
 
+  // Verifica que a nova senha é diferente da atual
+  const samePwd = await bcrypt.compare(newPassword, user.password);
+  if (samePwd) {
+    return res.status(400).json({ error: 'A nova senha deve ser diferente da atual.' });
+  }
+
+  // Hash e salva
   const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-  db.prepare('UPDATE users SET password=? WHERE id=?').run(hash, req.user.id);
-  logDB('info', `Senha alterada: ${req.user.username}`, 'auth', req.user.id);
-  return res.json({ ok: true });
+  db.prepare('UPDATE users SET password=? WHERE id=?').run(hash, user.id);
+
+  logDB('info', `Senha alterada com sucesso: ${user.username}`, 'auth', user.id);
+  return res.json({ ok: true, message: 'Senha alterada com sucesso.' });
 });
 
-// Alias POST para compatibilidade
+// Alias POST (compatibilidade)
 app.post('/api/change-password', auth, async (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
   if (!currentPassword || !newPassword)
     return res.status(400).json({ error: 'Senha atual e nova senha são obrigatórias.' });
   if (typeof newPassword !== 'string' || newPassword.length < 3)
-    return res.status(400).json({ error: 'Nova senha deve ter pelo menos 3 caracteres.' });
+    return res.status(400).json({ error: 'Mínimo 3 caracteres.' });
 
-  const user = stmts.findById.get(req.user.id);
+  const user  = stmts.findById.get(req.user.id);
   if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
   const valid = await bcrypt.compare(currentPassword, user.password);
   if (!valid) return res.status(401).json({ error: 'Senha atual incorreta.' });
 
   const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-  db.prepare('UPDATE users SET password=? WHERE id=?').run(hash, req.user.id);
+  db.prepare('UPDATE users SET password=? WHERE id=?').run(hash, user.id);
+  logDB('info', `Senha alterada (POST alias): ${user.username}`, 'auth', user.id);
   return res.json({ ok: true });
 });
 
@@ -511,16 +610,250 @@ app.post('/api/feedback', auth, (req, res) => {
   if (!message || typeof message !== 'string' || message.trim().length < 3)
     return res.status(400).json({ error: 'Mensagem inválida (mínimo 3 caracteres).' });
   if (message.length > 2000)
-    return res.status(400).json({ error: 'Mensagem muito longa (máximo 2000 caracteres).' });
+    return res.status(400).json({ error: 'Mensagem muito longa.' });
 
   stmts.insertFeedback.run(req.user.id, message.trim(), nowISO());
   logDB('info', `Feedback de ${req.user.username}`, 'feedback', req.user.id);
   return res.json({ ok: true });
 });
 
-// ════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+//  RELATÓRIO FINANCEIRO EM PDF
+// ══════════════════════════════════════════════════════════════
+
+app.get('/api/finance/report', auth, (req, res) => {
+  try {
+    // Busca dados do usuário
+    const userRow = stmts.findById.get(req.user.id);
+    const dataRow = stmts.getUserData.get(req.user.id);
+    const data    = parseUserData(dataRow);
+
+    const transactions = data.transactions || [];
+    const userName     = userRow?.name || req.user.username;
+    const reportDate   = new Date().toLocaleDateString('pt-BR', {
+      day: '2-digit', month: 'long', year: 'numeric',
+    });
+
+    // Totais
+    const totalIn  = transactions.filter((t) => t.type === 'income').reduce((s, t) => s + (t.amount || 0), 0);
+    const totalOut = transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + (t.amount || 0), 0);
+    const balance  = totalIn - totalOut;
+
+    const fmt = (n) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
+
+    const CATEGORY_LABELS = {
+      alimentacao: 'Alimentação', assinatura: 'Assinatura', curso: 'Curso',
+      salario: 'Salário', freelancer: 'Freelancer', saude: 'Saúde',
+      transporte: 'Transporte', moradia: 'Moradia', lazer: 'Lazer', outro: 'Outro',
+    };
+    const BANK_LABELS = {
+      nubank: 'Nubank', itau: 'Itaú', inter: 'Inter',
+      bradesco: 'Bradesco', caixa: 'Caixa', outro: 'Outro',
+    };
+
+    const catLabel  = (v) => CATEGORY_LABELS[v] || v || 'Outro';
+    const bankLabel = (v) => BANK_LABELS[v] || v || 'Outro';
+    const txDate    = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+
+    // ── Gera o PDF ──────────────────────────────────────────────
+
+    const doc = new PDFDocument({
+      size: 'A4',
+      margins: { top: 50, bottom: 50, left: 50, right: 50 },
+      info: {
+        Title:    'LifeFlow — Relatório Financeiro',
+        Author:   'LifeFlow',
+        Subject:  `Relatório de ${userName}`,
+        Creator:  'LifeFlow Backend v8',
+      },
+    });
+
+    res.set({
+      'Content-Type':        'application/pdf',
+      'Content-Disposition': `attachment; filename="lifeflow-relatorio.pdf"`,
+      'Cache-Control':       'no-store',
+    });
+
+    doc.pipe(res);
+
+    const W    = 595 - 100; // largura útil (A4 = 595 - margens)
+    const DARK = '#111111';
+    const LITE = '#888888';
+    const GRN  = '#1e7e4e';
+    const RED  = '#b91c1c';
+    const LINE = '#e0e0e0';
+
+    // ── CABEÇALHO ─────────────────────────────────────────────
+    doc.rect(50, 50, W, 70).fill('#111111');
+
+    doc.fontSize(22).font('Helvetica-Bold').fillColor('#ffffff')
+      .text('LifeFlow', 68, 65);
+    doc.fontSize(10).font('Helvetica').fillColor('#aaaaaa')
+      .text('Relatório Financeiro', 68, 92);
+
+    doc.fontSize(9).fillColor('#cccccc')
+      .text(`${userName}  ·  ${reportDate}`, 68, 108, { align: 'left' });
+
+    // Total de transações no canto direito do header
+    doc.fontSize(9).fillColor('#888888')
+      .text(`${transactions.length} transações`, 50, 108, { width: W, align: 'right' });
+
+    // ── CARDS DE RESUMO ───────────────────────────────────────
+    const cardY = 140;
+    const cardW = (W - 20) / 3;
+    const cards = [
+      { label: 'Total Entradas', value: fmt(totalIn),  color: GRN  },
+      { label: 'Total Saídas',   value: fmt(totalOut), color: RED  },
+      { label: 'Saldo Final',    value: fmt(balance),  color: balance >= 0 ? GRN : RED },
+    ];
+
+    cards.forEach((card, i) => {
+      const x = 50 + i * (cardW + 10);
+      doc.rect(x, cardY, cardW, 58).stroke(LINE).fillAndStroke('#fafafa', LINE);
+      doc.fontSize(8).font('Helvetica').fillColor(LITE)
+        .text(card.label.toUpperCase(), x + 12, cardY + 10, { width: cardW - 24 });
+      doc.fontSize(14).font('Helvetica-Bold').fillColor(card.color)
+        .text(card.value, x + 12, cardY + 26, { width: cardW - 24 });
+    });
+
+    // ── TABELA DE TRANSAÇÕES ──────────────────────────────────
+    let y = cardY + 80;
+
+    // Título da seção
+    doc.fontSize(11).font('Helvetica-Bold').fillColor(DARK)
+      .text('Transações', 50, y);
+    y += 18;
+
+    // Header da tabela
+    const cols = [
+      { label: 'Data',      x: 50,  w: 60  },
+      { label: 'Descrição', x: 115, w: 155 },
+      { label: 'Categoria', x: 275, w: 85  },
+      { label: 'Banco',     x: 365, w: 65  },
+      { label: 'Tipo',      x: 435, w: 50  },
+      { label: 'Valor',     x: 490, w: 60  },
+    ];
+
+    // Fundo do header
+    doc.rect(50, y, W, 18).fill('#222222');
+    doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff');
+    cols.forEach((c) => doc.text(c.label, c.x + 4, y + 5, { width: c.w }));
+    y += 18;
+
+    // Linhas de transações
+    const sorted = [...transactions].sort((a, b) =>
+      new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0)
+    );
+
+    if (sorted.length === 0) {
+      doc.rect(50, y, W, 28).fill('#f9f9f9');
+      doc.fontSize(9).font('Helvetica').fillColor(LITE)
+        .text('Nenhuma transação registrada.', 50, y + 9, { width: W, align: 'center' });
+      y += 28;
+    }
+
+    sorted.forEach((tx, i) => {
+      // Verifica se precisa de nova página
+      if (y > 730) {
+        doc.addPage();
+        y = 50;
+        // Re-imprime header da tabela na nova página
+        doc.rect(50, y, W, 18).fill('#222222');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff');
+        cols.forEach((c) => doc.text(c.label, c.x + 4, y + 5, { width: c.w }));
+        y += 18;
+      }
+
+      const rowH     = 20;
+      const rowColor = i % 2 === 0 ? '#ffffff' : '#f7f7f7';
+      doc.rect(50, y, W, rowH).fill(rowColor);
+
+      // Linha separadora
+      doc.moveTo(50, y + rowH).lineTo(50 + W, y + rowH).stroke(LINE);
+
+      const isIncome = tx.type === 'income';
+      const amount   = tx.amount || 0;
+      const sign     = isIncome ? '+' : '-';
+
+      doc.fontSize(8).font('Helvetica').fillColor(DARK);
+
+      doc.text(txDate(tx.date),                   cols[0].x + 4, y + 6, { width: cols[0].w - 4 });
+      doc.text(tx.title || tx.description || '-', cols[1].x + 4, y + 6, { width: cols[1].w - 4 });
+      doc.text(catLabel(tx.category),             cols[2].x + 4, y + 6, { width: cols[2].w - 4 });
+      doc.text(bankLabel(tx.bank),                cols[3].x + 4, y + 6, { width: cols[3].w - 4 });
+
+      // Tipo colorido
+      doc.fillColor(isIncome ? GRN : RED)
+        .text(isIncome ? 'Entrada' : 'Saída',    cols[4].x + 4, y + 6, { width: cols[4].w - 4 });
+
+      // Valor alinhado à direita
+      doc.fillColor(isIncome ? GRN : RED).font('Helvetica-Bold')
+        .text(`${sign}${fmt(amount)}`,            cols[5].x + 4, y + 6, { width: cols[5].w - 4, align: 'right' });
+
+      y += rowH;
+    });
+
+    // ── BREAKDOWN POR CATEGORIA ───────────────────────────────
+    if (transactions.length > 0) {
+      y += 20;
+      if (y > 650) { doc.addPage(); y = 50; }
+
+      doc.fontSize(11).font('Helvetica-Bold').fillColor(DARK)
+        .text('Gastos por Categoria', 50, y);
+      y += 16;
+
+      const byCat = {};
+      for (const tx of transactions.filter((t) => t.type === 'expense')) {
+        const k = catLabel(tx.category || 'outro');
+        byCat[k] = (byCat[k] || 0) + (tx.amount || 0);
+      }
+      const catEntries = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+
+      if (catEntries.length === 0) {
+        doc.fontSize(9).font('Helvetica').fillColor(LITE).text('Sem despesas registradas.', 50, y);
+        y += 16;
+      } else {
+        catEntries.forEach(([cat, total], i) => {
+          if (y > 730) { doc.addPage(); y = 50; }
+          const rowH     = 18;
+          const rowColor = i % 2 === 0 ? '#ffffff' : '#f7f7f7';
+          doc.rect(50, y, W, rowH).fill(rowColor);
+          doc.fontSize(8).font('Helvetica').fillColor(DARK)
+            .text(cat, 54, y + 5, { width: 180 });
+          doc.font('Helvetica-Bold').fillColor(RED)
+            .text(fmt(total), 54, y + 5, { width: W - 8, align: 'right' });
+          doc.moveTo(50, y + rowH).lineTo(50 + W, y + rowH).stroke(LINE);
+          y += rowH;
+        });
+      }
+    }
+
+    // ── RODAPÉ ────────────────────────────────────────────────
+    const pageCount = doc.bufferedPageRange();
+    for (let i = 0; i < (pageCount ? pageCount.count : 1); i++) {
+      doc.switchToPage(i);
+      doc.fontSize(7).font('Helvetica').fillColor('#aaaaaa')
+        .text(
+          `LifeFlow · Relatório gerado em ${reportDate} · Confidencial`,
+          50, 820, { width: W, align: 'center' }
+        );
+    }
+
+    doc.end();
+
+    logDB('info', `Relatório PDF gerado: user=${req.user.username} txs=${transactions.length}`, 'report', req.user.id);
+
+  } catch (err) {
+    logDB('error', `Erro ao gerar PDF: ${err.message}`, 'report', req.user.id);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Erro ao gerar relatório.' });
+    }
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
 //  ROTAS ADMIN
-// ════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 
 app.get('/api/users', auth, adminOnly, (_req, res) => {
   const users = stmts.getAllUsers.all().map((u) => ({ ...u, is_online: Boolean(u.is_online) }));
@@ -562,29 +895,31 @@ app.patch('/api/reset-password', auth, adminOnly, async (req, res) => {
   return res.json({ ok: true });
 });
 
-// ════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 //  ERROR HANDLERS
-// ════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 
 app.use((_req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
-  console.error('[ERRO INTERNO]', err.message || err);
-  logDB('error', err.message || 'Erro interno', 'system');
-  res.status(err.status || 500).json({ error: err.message || 'Erro interno do servidor.' });
+  const msg = err.message || 'Erro interno';
+  console.error('[ERRO INTERNO]', msg);
+  logDB('error', msg.slice(0, 500), 'system');
+  if (!res.headersSent)
+    res.status(err.status || 500).json({ error: 'Erro interno do servidor.' });
 });
 
-// ════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 //  START
-// ════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 
 initDB();
 prepareStatements();
 
 app.listen(PORT, () => {
   console.log('');
-  console.log('🚀 LifeFlow Backend v7');
+  console.log('🚀 LifeFlow Backend v8');
   console.log(`   http://localhost:${PORT}`);
   console.log(`   DB: ${DB_PATH}`);
   console.log('');
@@ -594,18 +929,19 @@ app.listen(PORT, () => {
     'POST   /api/logout',
     'GET    /api/me',
     'PATCH  /api/heartbeat',
-    'GET    /api/data',
-    'POST   /api/data',
+    'GET    /api/data               ← sempre do banco, sem cache',
+    'POST   /api/data               ← merge inteligente por campo',
     'PATCH  /api/user/profile',
-    'PATCH  /api/change-password',
+    'PATCH  /api/change-password    ← bcrypt, validação completa',
     'POST   /api/feedback',
-    'GET    /api/users           (admin)',
-    'GET    /api/admin/activity  (admin)',
-    'GET    /api/feedbacks       (admin)',
-    'GET    /api/logs            (admin)',
-    'PATCH  /api/reset-password  (admin)',
+    'GET    /api/finance/report     ← PDF download',
+    'GET    /api/users              (admin)',
+    'GET    /api/admin/activity     (admin)',
+    'GET    /api/feedbacks          (admin)',
+    'GET    /api/logs               (admin)',
+    'PATCH  /api/reset-password     (admin)',
   ].forEach((r) => console.log(`   ${r}`));
   console.log('');
-  console.log('👤 Usuários:  tallis/0724 (admin)  yasmin/1234  pedro/123');
+  console.log('👤 tallis/0724 (admin)  yasmin/1234  pedro/123');
   console.log('');
 });

@@ -7,10 +7,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Trash2, TrendingUp, TrendingDown, Wallet,
   Sparkles, Send, ChevronLeft, ChevronRight,
-  BarChart3, List, Home, Edit3, Check, X, AlertCircle,
+  BarChart3, List, Home, Edit3, Check, X, AlertCircle, FileDown,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
+import { apiBaseURL } from '../../services/api';
 
 // ═══════════════════════════════════════════════════════════════
 //  CONSTANTS
@@ -785,7 +786,32 @@ const TABS = [
 export default function Finance() {
   const { transactions, addTransaction, deleteTransaction, updateTransaction } = useApp();
   const toast = useToast();
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab]           = useState('overview');
+  const [downloading, setDownloading] = useState(false);
+
+  const handleReport = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const token = localStorage.getItem('lf_token');
+      const res   = await fetch(`${apiBaseURL}/finance/report`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'lifeflow-relatorio.pdf';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.show('Relatório baixado!', 'success');
+    } catch {
+      toast.show('Erro ao gerar relatório', 'error');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <div style={{ padding: '20px 16px', maxWidth: 680, margin: '0 auto', paddingBottom: 80 }}>
@@ -798,10 +824,26 @@ export default function Finance() {
         }}>
           <Wallet size={20} style={{ color: 'var(--green)' }} />
         </div>
-        <div>
+        <div style={{ flex: 1 }}>
           <h1 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>Financeiro</h1>
           <p style={{ fontSize: 12, color: 'var(--text-4)' }}>{transactions.length} transação{transactions.length !== 1 ? 'ões' : ''}</p>
         </div>
+        <button
+          onClick={handleReport}
+          disabled={downloading}
+          title="Gerar relatório em PDF"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '8px 14px', borderRadius: 12, fontSize: 12, fontWeight: 600,
+            border: '1px solid var(--border-md)', background: 'var(--bg-soft)',
+            color: downloading ? 'var(--text-4)' : 'var(--text-2)',
+            cursor: downloading ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
+            flexShrink: 0,
+          }}
+        >
+          <FileDown size={14} />
+          {downloading ? 'Gerando…' : 'Relatório'}
+        </button>
       </div>
 
       {/* Tab pills */}
