@@ -12,18 +12,13 @@ import {
 
 
 const TITLES = {
-  dashboard: { title: 'Dashboard',       sub: 'Visão geral do seu dia' },
-  tasks:     { title: 'Tarefas',          sub: 'Gerencie suas atividades' },
-  habits:    { title: 'Hábitos',          sub: 'Construa sua rotina' },
-  agenda:    { title: 'Agenda',           sub: 'Seus eventos e compromissos' },
-  finance:   { title: 'Financeiro',       sub: 'Controle de receitas e despesas' },
-  goals:     { title: 'Metas',            sub: 'Acompanhe seus objetivos' },
-  study:     { title: 'Estudos',          sub: 'Acompanhe seu aprendizado' },
-  notes:     { title: 'Notas',            sub: 'Anotações rápidas' },
-  pomodoro:  { title: 'Pomodoro',         sub: 'Timer de foco' },
-  weekly:    { title: 'Revisão Semanal',  sub: 'Reflita e planeje' },
-  admin:     { title: 'Painel Admin',     sub: 'Gestão de usuários' },
-  feedback:  { title: 'Sugestões',        sub: 'Envie ideias e feedback' },
+  dashboard: { title: 'Dashboard',   sub: 'Visão geral do seu dia'          },
+  tasks:     { title: 'Tarefas',     sub: 'Tarefas e agenda do dia'         },
+  habits:    { title: 'Hábitos',     sub: 'Construa sua rotina'             },
+  finance:   { title: 'Financeiro',  sub: 'Controle de receitas e despesas' },
+  goals:     { title: 'Metas',       sub: 'Acompanhe seus objetivos'        },
+  admin:     { title: 'Painel Admin',sub: 'Gestão de usuários'              },
+  feedback:  { title: 'Sugestões',   sub: 'Envie ideias e feedback'         },
 };
 
 // ── Modal Minha Conta (perfil + alterar senha) ───────────────────────────────

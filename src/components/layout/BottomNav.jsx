@@ -8,7 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard, Wallet, Flame,
   CheckSquare, Target, Shield, Lightbulb,
-  MoreHorizontal, CalendarCheck,
+  MoreHorizontal,
 } from 'lucide-react';
 
 // Os 5 itens fixos da tab bar (todos com o mesmo estilo)
@@ -20,10 +20,7 @@ const NAV_ITEMS = [
   { id: 'goals',     label: 'Metas',    icon: Target          },
 ];
 
-const MORE_BASE = [
-  { id: 'agenda',  label: 'Agenda',  icon: CalendarCheck },
-  { id: 'weekly',  label: 'Revisão', icon: CalendarCheck },
-];
+const MORE_BASE = [];
 
 // ── Botão de tab uniforme ──────────────────────────────────────────────────────
 function TabBtn({ item, active, badge, onClick }) {
@@ -110,7 +107,6 @@ export default function BottomNav() {
             key={item.id}
             item={item}
             active={activeTab === item.id}
-            badge={badges[item.id]}
             onClick={() => goTo(item.id)}
           />
         ))}

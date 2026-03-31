@@ -18,8 +18,6 @@ import Tasks      from './components/tasks/Tasks';
 import Habits     from './components/habits/Habits';
 import Finance    from './components/finance/Finance';
 import Goals      from './components/goals/Goals';
-import Weekly     from './components/weekly/Weekly';
-import Agenda     from './components/agenda/Agenda';
 import AdminPanel from './components/admin/AdminPanel';
 import Feedback   from './components/feedback/Feedback';
 import CommandPalette from './components/ui/CommandPalette';
@@ -30,17 +28,15 @@ const VIEWS = {
   dashboard: Dashboard,
   tasks:     Tasks,
   habits:    Habits,
-  agenda:    Agenda,
   finance:   Finance,
   goals:     Goals,
-  weekly:    Weekly,
   admin:     AdminPanel,
   feedback:  Feedback,
 };
 
 const SHORTCUTS = {
-  '1': 'dashboard', '2': 'tasks',  '3': 'habits',
-  '4': 'agenda',    '5': 'finance','6': 'goals',  '7': 'weekly',
+  '1': 'dashboard', '2': 'tasks', '3': 'habits',
+  '4': 'finance',   '5': 'goals',
 };
 
 const pageVariants  = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -8 } };

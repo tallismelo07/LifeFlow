@@ -5,20 +5,16 @@ import { useNav }  from '../../context/NavContext';
 import { useAuth } from '../../context/AuthContext';
 import {
   Search, LayoutDashboard, CheckSquare, Flame, Wallet,
-  BookOpen, Timer, StickyNote, Target, CalendarCheck, Calendar, Shield, LogOut,
+  Target, Shield, LogOut, Calendar,
 } from 'lucide-react';
 
 const BASE_COMMANDS = [
-  { id:'dashboard', label:'Dashboard',       icon:LayoutDashboard, tab:'dashboard', group:'Navegação' },
-  { id:'tasks',     label:'Tarefas',          icon:CheckSquare,     tab:'tasks',     group:'Navegação' },
-  { id:'habits',    label:'Hábitos',          icon:Flame,           tab:'habits',    group:'Navegação' },
-  { id:'agenda',    label:'Agenda',           icon:Calendar,        tab:'agenda',    group:'Navegação' },
-  { id:'finance',   label:'Financeiro',       icon:Wallet,          tab:'finance',   group:'Navegação' },
-  { id:'goals',     label:'Metas',            icon:Target,          tab:'goals',     group:'Navegação' },
-  { id:'study',     label:'Estudos',          icon:BookOpen,        tab:'study',     group:'Navegação' },
-  { id:'notes',     label:'Notas',            icon:StickyNote,      tab:'notes',     group:'Navegação' },
-  { id:'pomodoro',  label:'Pomodoro',         icon:Timer,           tab:'pomodoro',  group:'Navegação' },
-  { id:'weekly',    label:'Revisão Semanal',  icon:CalendarCheck,   tab:'weekly',    group:'Navegação' },
+  { id:'dashboard', label:'Dashboard',  icon:LayoutDashboard, tab:'dashboard', group:'Navegação' },
+  { id:'tasks',     label:'Tarefas',    icon:CheckSquare,     tab:'tasks',     group:'Navegação' },
+  { id:'agenda',    label:'Agenda',     icon:Calendar,        tab:'tasks',     group:'Navegação' },
+  { id:'habits',    label:'Hábitos',    icon:Flame,           tab:'habits',    group:'Navegação' },
+  { id:'finance',   label:'Financeiro', icon:Wallet,          tab:'finance',   group:'Navegação' },
+  { id:'goals',     label:'Metas',      icon:Target,          tab:'goals',     group:'Navegação' },
 ];
 
 export default function CommandPalette({ open, onClose }) {
