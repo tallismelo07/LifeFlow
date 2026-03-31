@@ -6,14 +6,10 @@ import { useApp } from '../../context/AppContext';
 import { Modal, Input, Textarea, Button, EmptyState } from '../ui';
 import {
   ChevronLeft, ChevronRight, Plus, Trash2, Pencil,
-  Calendar, Clock, AlignLeft,
+  Calendar, Clock, AlignLeft, CheckSquare,
 } from 'lucide-react';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-const fmtDate = (iso) => {
-  const d = new Date(iso);
-  return d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
-};
 const fmtTime = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 const isoDate = (d) => d.toISOString().split('T')[0];
 const sameDay = (iso, date) => iso.startsWith(isoDate(date));
@@ -27,7 +23,7 @@ const EVENT_COLORS = [
   { label: 'Roxo',   value: 'var(--violet)' },
 ];
 
-const BLANK_EVENT = { title: '', date: '', startTime: '09:00', endTime: '10:00', description: '', color: 'var(--blue)' };
+const BLANK_EVENT = { title: '', date: '', startTime: '09:00', endTime: '10:00', description: '', color: 'var(--blue)', createTask: false };
 
 // ── Week view helpers ─────────────────────────────────────────────────────────
 const getWeekDays = (date) => {
@@ -42,7 +38,7 @@ const getWeekDays = (date) => {
 };
 
 export default function Agenda() {
-  const { agenda, addEvent, updateEvent, deleteEvent } = useApp();
+  const { agenda, addEvent, updateEvent, deleteEvent, addTask } = useApp();
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView]               = useState('day'); // 'day' | 'week'
@@ -108,7 +104,20 @@ export default function Agenda() {
     };
 
     if (editTarget) updateEvent(editTarget, payload);
-    else            addEvent(payload);
+    else {
+      addEvent(payload);
+      // Cria tarefa vinculada se solicitado
+      if (form.createTask) {
+        addTask({
+          title:       form.title.trim(),
+          description: form.description.trim() || `Evento da agenda: ${form.date}`,
+          priority:    'medium',
+          status:      'todo',
+          dueDate:     form.date,
+          completed:   false,
+        });
+      }
+    }
     setModalOpen(false);
   };
 
@@ -250,6 +259,57 @@ export default function Agenda() {
 
           <Textarea label="Descrição" placeholder="Detalhes do evento..." value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
+
+          {/* Criar como tarefa — apenas em novos eventos */}
+          {!editTarget && (
+            <button
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, createTask: !f.createTask }))}
+              className="flex items-center gap-3 w-full text-left"
+              style={{
+                padding:      '12px 14px',
+                borderRadius: 12,
+                border:       `1.5px solid ${form.createTask ? 'var(--blue-border)' : 'var(--border)'}`,
+                background:   form.createTask ? 'var(--blue-bg)' : 'var(--bg-muted)',
+                cursor:       'pointer',
+                transition:   'border-color 0.15s, background 0.15s',
+              }}
+            >
+              <CheckSquare
+                size={16}
+                style={{ color: form.createTask ? 'var(--blue)' : 'var(--text-4)', flexShrink: 0 }}
+              />
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.2 }}>
+                  Isso é uma tarefa?
+                </p>
+                <p style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2 }}>
+                  Cria também uma tarefa vinculada a este evento
+                </p>
+              </div>
+              <div
+                style={{
+                  marginLeft:   'auto',
+                  width:        18,
+                  height:       18,
+                  borderRadius: 5,
+                  background:   form.createTask ? 'var(--blue)' : 'transparent',
+                  border:       `2px solid ${form.createTask ? 'var(--blue)' : 'var(--border-strong)'}`,
+                  flexShrink:   0,
+                  display:      'flex',
+                  alignItems:   'center',
+                  justifyContent: 'center',
+                  transition:   'all 0.15s',
+                }}
+              >
+                {form.createTask && (
+                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                    <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </div>
+            </button>
+          )}
 
           {/* Color picker */}
           <div>

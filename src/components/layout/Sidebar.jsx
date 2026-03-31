@@ -4,16 +4,19 @@ import { useApp }  from '../../context/AppContext';
 import { useNav }  from '../../context/NavContext';
 import { useAuth } from '../../context/AuthContext';
 import {
-  LayoutDashboard, CheckSquare, Flame, Wallet,
-  Leaf, X, Target, Shield, Lightbulb,
+  Home, LayoutDashboard, CheckSquare, Flame, Wallet,
+  Leaf, X, Target, Shield, Lightbulb, Calendar, CalendarCheck,
 } from 'lucide-react';
 
 const getNavItems = (isAdmin) => [
-  { id: 'dashboard', label: 'Dashboard',  icon: LayoutDashboard, shortcut: '1' },
-  { id: 'tasks',     label: 'Tarefas',    icon: CheckSquare,     shortcut: '2' },
-  { id: 'habits',    label: 'Hábitos',    icon: Flame,           shortcut: '3' },
-  { id: 'finance',   label: 'Financeiro', icon: Wallet,          shortcut: '4' },
-  { id: 'goals',     label: 'Metas',      icon: Target,          shortcut: '5' },
+  { id: 'home',      label: 'Início',     icon: Home,            shortcut: '1' },
+  { id: 'dashboard', label: 'Dashboard',  icon: LayoutDashboard, shortcut: '2' },
+  { id: 'tasks',     label: 'Tarefas',    icon: CheckSquare,     shortcut: '3' },
+  { id: 'habits',    label: 'Hábitos',    icon: Flame,           shortcut: '4' },
+  { id: 'agenda',    label: 'Agenda',     icon: Calendar,        shortcut: '5' },
+  { id: 'finance',   label: 'Financeiro', icon: Wallet,          shortcut: '6' },
+  { id: 'goals',     label: 'Metas',      icon: Target,          shortcut: '7' },
+  { id: 'checkin',   label: 'Check-in',   icon: CalendarCheck,   shortcut: 'C' },
   ...(!isAdmin ? [{ id: 'feedback', label: 'Sugestões', icon: Lightbulb, shortcut: 'F' }] : []),
   ...(isAdmin  ? [{ id: 'admin',    label: 'Admin',     icon: Shield,    shortcut: 'A', isAdmin: true }] : []),
 ];

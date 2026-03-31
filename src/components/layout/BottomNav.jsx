@@ -1,28 +1,32 @@
 // src/components/layout/BottomNav.jsx
-// Tab bar uniforme — sem FAB central, todos os botões com o mesmo formato
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNav  } from '../../context/NavContext';
 import { useAuth } from '../../context/AuthContext';
 import {
-  LayoutDashboard, Wallet, Flame,
+  Home, LayoutDashboard, Wallet, Flame,
   CheckSquare, Target, Shield, Lightbulb,
-  MoreHorizontal,
+  MoreHorizontal, Calendar, CalendarCheck,
 } from 'lucide-react';
 
-// Os 5 itens fixos da tab bar (todos com o mesmo estilo)
+// 5 itens fixos na tab bar
 const NAV_ITEMS = [
+  { id: 'home',      label: 'Início',   icon: Home            },
   { id: 'dashboard', label: 'Atlas',    icon: LayoutDashboard },
+  { id: 'tasks',     label: 'Trilha',   icon: CheckSquare     },
   { id: 'finance',   label: 'Finanças', icon: Wallet          },
   { id: 'habits',    label: 'Rotina',   icon: Flame           },
-  { id: 'tasks',     label: 'Trilha',   icon: CheckSquare     },
-  { id: 'goals',     label: 'Metas',    icon: Target          },
 ];
 
-const MORE_BASE = [];
+// Itens do menu "Mais"
+const MORE_BASE = [
+  { id: 'agenda',  label: 'Agenda',     icon: Calendar      },
+  { id: 'goals',   label: 'Metas',      icon: Target        },
+  { id: 'checkin', label: 'Check-in',   icon: CalendarCheck },
+];
 
-// ── Botão de tab uniforme ──────────────────────────────────────────────────────
+// ── Botão de tab ─────────────────────────────────────────────
 function TabBtn({ item, active, badge, onClick }) {
   const Icon = item.icon;
   return (
@@ -37,7 +41,6 @@ function TabBtn({ item, active, badge, onClick }) {
         WebkitTapHighlightColor: 'transparent',
       }}
     >
-      {/* Indicador superior */}
       {active && (
         <motion.div
           layoutId="tab-indicator"
@@ -47,7 +50,6 @@ function TabBtn({ item, active, badge, onClick }) {
         />
       )}
 
-      {/* Ícone */}
       <motion.div
         className="relative"
         animate={{ scale: active ? 1.12 : 1 }}
@@ -64,7 +66,6 @@ function TabBtn({ item, active, badge, onClick }) {
         )}
       </motion.div>
 
-      {/* Label */}
       <span
         className="text-[9px] font-medium leading-none uppercase"
         style={{ letterSpacing: '0.04em' }}
@@ -81,9 +82,13 @@ export default function BottomNav() {
   const isAdmin  = currentUser?.role === 'admin';
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const allMore = isAdmin
-    ? [...MORE_BASE, { id: 'admin',    label: 'Admin',     icon: Shield    }]
-    : [...MORE_BASE, { id: 'feedback', label: 'Sugestões', icon: Lightbulb }];
+  const allMore = [
+    ...MORE_BASE,
+    ...(isAdmin
+      ? [{ id: 'admin',    label: 'Admin',     icon: Shield    }]
+      : [{ id: 'feedback', label: 'Sugestões', icon: Lightbulb }]
+    ),
+  ];
 
   const isMoreActive = allMore.some((i) => i.id === activeTab);
 
@@ -91,7 +96,7 @@ export default function BottomNav() {
 
   return (
     <>
-      {/* ── Tab bar ────────────────────────────────────────────── */}
+      {/* ── Tab bar ─────────────────────────────────────────── */}
       <nav
         className="lg:hidden fixed left-0 right-0 bottom-0 z-30 flex"
         style={{
@@ -111,7 +116,7 @@ export default function BottomNav() {
           />
         ))}
 
-        {/* Botão Menu */}
+        {/* Botão Mais */}
         <button
           type="button"
           onClick={() => setMoreOpen((o) => !o)}
@@ -138,12 +143,12 @@ export default function BottomNav() {
             <MoreHorizontal size={19} strokeWidth={1.6} />
           </motion.div>
           <span className="text-[9px] font-medium leading-none uppercase" style={{ letterSpacing: '0.04em' }}>
-            Menu
+            Mais
           </span>
         </button>
       </nav>
 
-      {/* ── Sheet "Menu" ──────────────────────────────────────── */}
+      {/* ── Sheet "Mais" ─────────────────────────────────────── */}
       <AnimatePresence>
         {moreOpen && (
           <>

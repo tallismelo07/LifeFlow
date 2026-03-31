@@ -17,7 +17,7 @@ import { createContext, useContext, useState } from 'react';
 const NavContext = createContext(null);
 
 export function NavProvider({ children }) {
-  const [activeTab,   setActiveTab]   = useState('dashboard');
+  const [activeTab,   setActiveTab]   = useState('home');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (

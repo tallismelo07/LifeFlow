@@ -137,14 +137,31 @@ function initDB() {
     )
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS daily_checkins (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id       INTEGER NOT NULL,
+      date          TEXT    NOT NULL,
+      produtividade INTEGER NOT NULL DEFAULT 0,
+      dia_bom       INTEGER NOT NULL DEFAULT 0,
+      dormiu_bem    INTEGER NOT NULL DEFAULT 0,
+      promessas     INTEGER NOT NULL DEFAULT 0,
+      diario        TEXT    NOT NULL DEFAULT '',
+      created_at    TEXT    NOT NULL DEFAULT '',
+      UNIQUE(user_id, date),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
   // Índices
   db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_user_data_user_id ON user_data (user_id);
-    CREATE INDEX IF NOT EXISTS idx_feedbacks_user_id ON feedbacks (user_id);
-    CREATE INDEX IF NOT EXISTS idx_feedbacks_created ON feedbacks (created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_logs_created      ON logs (created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_logs_user_id      ON logs (user_id);
-    CREATE INDEX IF NOT EXISTS idx_logs_level        ON logs (level);
+    CREATE INDEX IF NOT EXISTS idx_user_data_user_id  ON user_data (user_id);
+    CREATE INDEX IF NOT EXISTS idx_feedbacks_user_id  ON feedbacks (user_id);
+    CREATE INDEX IF NOT EXISTS idx_feedbacks_created  ON feedbacks (created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_logs_created       ON logs (created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_logs_user_id       ON logs (user_id);
+    CREATE INDEX IF NOT EXISTS idx_logs_level         ON logs (level);
+    CREATE INDEX IF NOT EXISTS idx_checkins_user_date ON daily_checkins (user_id, date DESC);
   `);
 
   // Migrações
@@ -849,6 +866,62 @@ app.get('/api/finance/report', auth, (req, res) => {
       res.status(500).json({ error: 'Erro ao gerar relatório.' });
     }
   }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  CHECK-IN DIÁRIO
+// ══════════════════════════════════════════════════════════════
+
+// GET /api/checkins — retorna todos os check-ins do usuário
+app.get('/api/checkins', auth, (req, res) => {
+  const rows = db.prepare(
+    'SELECT * FROM daily_checkins WHERE user_id = ? ORDER BY date DESC'
+  ).all(req.user.id);
+
+  const checkins = rows.map((c) => ({
+    id:            c.id,
+    date:          c.date,
+    produtividade: Boolean(c.produtividade),
+    dia_bom:       Boolean(c.dia_bom),
+    dormiu_bem:    Boolean(c.dormiu_bem),
+    promessas:     Boolean(c.promessas),
+    diario:        c.diario || '',
+    created_at:    c.created_at,
+  }));
+
+  return res.set('Cache-Control', 'no-store').json({ checkins });
+});
+
+// POST /api/checkins — cria ou atualiza check-in do dia (upsert)
+app.post('/api/checkins', auth, (req, res) => {
+  const { date, produtividade, dia_bom, dormiu_bem, promessas, diario } = req.body || {};
+
+  if (!date || typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date))
+    return res.status(400).json({ error: 'data inválida (formato YYYY-MM-DD).' });
+
+  db.prepare(`
+    INSERT INTO daily_checkins
+      (user_id, date, produtividade, dia_bom, dormiu_bem, promessas, diario, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, date) DO UPDATE SET
+      produtividade = excluded.produtividade,
+      dia_bom       = excluded.dia_bom,
+      dormiu_bem    = excluded.dormiu_bem,
+      promessas     = excluded.promessas,
+      diario        = excluded.diario
+  `).run(
+    req.user.id,
+    date,
+    produtividade ? 1 : 0,
+    dia_bom       ? 1 : 0,
+    dormiu_bem    ? 1 : 0,
+    promessas     ? 1 : 0,
+    typeof diario === 'string' ? diario.slice(0, 5000) : '',
+    nowISO()
+  );
+
+  logDB('info', `Check-in ${date}: user=${req.user.username}`, 'checkin', req.user.id);
+  return res.json({ ok: true });
 });
 
 // ══════════════════════════════════════════════════════════════

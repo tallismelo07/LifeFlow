@@ -14,9 +14,12 @@ import Sidebar        from './components/layout/Sidebar';
 import BottomNav      from './components/layout/BottomNav';
 import Header         from './components/layout/Header';
 
+import Home       from './components/home/Home';
+import CheckIn    from './components/checkin/CheckIn';
 import Dashboard  from './components/dashboard/Dashboard';
 import Tasks      from './components/tasks/Tasks';
 import Habits     from './components/habits/Habits';
+import Agenda     from './components/agenda/Agenda';
 import Finance    from './components/finance/Finance';
 import Goals      from './components/goals/Goals';
 import AdminPanel from './components/admin/AdminPanel';
@@ -26,9 +29,12 @@ import CommandPalette from './components/ui/CommandPalette';
 // ─────────────────────────────────────────────────────────────
 
 const VIEWS = {
+  home:      Home,
+  checkin:   CheckIn,
   dashboard: Dashboard,
   tasks:     Tasks,
   habits:    Habits,
+  agenda:    Agenda,
   finance:   Finance,
   goals:     Goals,
   admin:     AdminPanel,
@@ -36,8 +42,8 @@ const VIEWS = {
 };
 
 const SHORTCUTS = {
-  '1': 'dashboard', '2': 'tasks', '3': 'habits',
-  '4': 'finance',   '5': 'goals',
+  '1': 'home', '2': 'dashboard', '3': 'tasks',
+  '4': 'finance', '5': 'goals',
 };
 
 const pageVariants  = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -8 } };
@@ -49,7 +55,7 @@ function AppShell() {
   const { activeTab, setActiveTab } = useNav();   // ← NavContext (não muda com dados)
   const [cmdOpen, setCmdOpen] = useState(false);
 
-  const View = VIEWS[activeTab] || Dashboard;
+  const View = VIEWS[activeTab] || Home;
 
   useEffect(() => {
     const handler = (e) => {
