@@ -7,6 +7,7 @@ import { AppProvider } from './context/AppContext';
 import { NavProvider, useNav } from './context/NavContext';
 import { Leaf } from 'lucide-react';
 
+import { ToastProvider } from './context/ToastContext';
 import LoginPage      from './components/auth/LoginPage';
 import WelcomeScreen  from './components/auth/WelcomeScreen';
 import Sidebar        from './components/layout/Sidebar';
@@ -65,11 +66,34 @@ function AppShell() {
   }, [setActiveTab]);
 
   return (
-    <div className="flex min-h-screen font-sans" style={{ background: 'var(--bg)' }}>
+    <div
+      className="flex font-sans"
+      style={{
+        background: 'var(--bg)',
+        height: '100dvh',
+        maxHeight: '100dvh',
+        overflow: 'hidden',
+        position: 'fixed',
+        inset: 0,
+      }}
+    >
       <Sidebar />
-      <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+      <main
+        className="flex-1 flex flex-col min-w-0"
+        style={{ overflow: 'hidden', minWidth: 0 }}
+      >
         <Header onOpenCmd={() => setCmdOpen(true)} />
-        <div className="flex-1 overflow-y-auto pb-20 lg:pb-0">
+        {/* Único elemento scrollável — header e nav ficam fixos */}
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 68px)',
+            WebkitOverflowScrolling: 'touch',
+          }}
+          className="lg:pb-0"
+        >
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -78,7 +102,6 @@ function AppShell() {
               animate="animate"
               exit="exit"
               transition={pageTransition}
-              className="h-full"
             >
               <View />
             </motion.div>
@@ -130,16 +153,16 @@ function AuthenticatedApp({ user }) {
   }, [user.username]);
 
   return (
-    // NavProvider wraps tudo — BottomNav e Sidebar assinam APENAS este contexto
-    // AppProvider é o contexto de dados — só componentes de dados re-renderizam
-    <NavProvider>
-      <AppProvider key={user.username}>
-        {showWelcome && (
-          <WelcomeScreen user={user} onDone={() => setShowWelcome(false)} />
-        )}
-        <AppShell />
-      </AppProvider>
-    </NavProvider>
+    <ToastProvider>
+      <NavProvider>
+        <AppProvider key={user.username}>
+          {showWelcome && (
+            <WelcomeScreen user={user} onDone={() => setShowWelcome(false)} />
+          )}
+          <AppShell />
+        </AppProvider>
+      </NavProvider>
+    </ToastProvider>
   );
 }
 

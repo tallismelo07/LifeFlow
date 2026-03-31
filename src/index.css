@@ -120,6 +120,15 @@ html.light {
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
 
+  /* ── App-shell: sem scroll no body, apenas no conteúdo interno ── */
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    /* Previne scroll lateral em qualquer situação */
+    max-width: 100%;
+    overscroll-behavior: none;
+  }
+
   html { scroll-behavior: smooth; }
 
   body {

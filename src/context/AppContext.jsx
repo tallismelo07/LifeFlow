@@ -295,6 +295,7 @@ export function AppProvider({ children }) {
   const balance           = totalIncome - totalExpense;
   // Preserva tx.date (data selecionada pelo usuário) — não sobrescreve com timestamp atual
   const addTransaction    = (tx) => update('transactions', (a) => [{ ...tx, id: genId(), createdAt: new Date().toISOString(), date: tx.date || new Date().toISOString().split('T')[0] }, ...a]);
+  const updateTransaction = (id, u) => update('transactions', (a) => a.map((t) => t.id === id ? { ...t, ...u } : t));
   const deleteTransaction = (id) => update('transactions', (a) => a.filter((t) => t.id !== id));
 
   const studyItems        = data.studyItems || [];
@@ -326,7 +327,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       tasks,        addTask,    updateTask,    deleteTask,    toggleTask,
       habits,       addHabit,   updateHabit,   deleteHabit,   toggleHabit,
-      transactions, totalIncome, totalExpense, balance, addTransaction, deleteTransaction,
+      transactions, totalIncome, totalExpense, balance, addTransaction, updateTransaction, deleteTransaction,
       studyItems,   addStudyItem, updateStudyItem, deleteStudyItem,
       notes,        addNote,    updateNote,    deleteNote,
       goals,        addGoal,    updateGoal,    deleteGoal,
