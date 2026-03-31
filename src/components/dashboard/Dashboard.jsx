@@ -1,397 +1,528 @@
-// src/components/dashboard/Dashboard.jsx
+// src/components/dashboard/Dashboard.jsx — v2
+// Dashboard inteligente: financeiro por mês, status de saúde, alertas
 import { motion } from 'framer-motion';
 import { useApp }  from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import { StatCard } from '../ui';
+import { useNav }  from '../../context/NavContext';
 import CatMascot   from '../ui/CatMascot';
 import {
   CheckSquare, Flame, TrendingUp, TrendingDown, DollarSign,
   Target, ArrowRight, Circle, CheckCircle2, Calendar, Clock, Wallet,
+  AlertTriangle, ThumbsUp, Minus,
 } from 'lucide-react';
 
-const fmt     = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
-const fmtTime = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+// ── Formatadores ──────────────────────────────────────────────
+const fmt     = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+const fmtTime = (iso) => { try { return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
 
+// ── Motion variants ───────────────────────────────────────────
 const container = { animate: { transition: { staggerChildren: 0.06 } } };
-const item = {
-  initial: { opacity: 0, y: 16 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.28, ease: 'easeOut' } },
+const fadeUp    = {
+  initial: { opacity: 0, y: 14 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.26, ease: 'easeOut' } },
 };
 
-function ProgressRow({ label, value, color }) {
-  return (
-    <div>
-      <div className="flex justify-between text-xs mb-1.5">
-        <span style={{ color: 'var(--text-3)' }}>{label}</span>
-        <span className="font-mono font-semibold" style={{ color }}>{value}%</span>
-      </div>
-      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-muted)' }}>
-        <motion.div
-          className="h-full rounded-full"
-          initial={{ width: 0 }}
-          animate={{ width: `${value}%` }}
-          transition={{ duration: 0.9, ease: 'easeOut', delay: 0.3 }}
-          style={{ backgroundColor: color }}
-        />
-      </div>
-    </div>
-  );
-}
+// ── Componentes internos ──────────────────────────────────────
 
-function Card({ children, className = '', hover = false, ...props }) {
+function Card({ children, className = '', hover = false }) {
   return (
     <motion.div
-      variants={item}
+      variants={fadeUp}
       className={`card ${hover ? 'card-hover' : ''} ${className}`}
       whileHover={hover ? { y: -2 } : undefined}
-      {...props}
     >
       {children}
     </motion.div>
   );
 }
 
+function ProgressBar({ value, color }) {
+  return (
+    <div style={{ height: 6, borderRadius: 99, overflow: 'hidden', background: 'var(--bg-muted)', flex: 1 }}>
+      <motion.div
+        style={{ height: '100%', borderRadius: 99, backgroundColor: color }}
+        initial={{ width: 0 }}
+        animate={{ width: `${value}%` }}
+        transition={{ duration: 0.9, ease: 'easeOut', delay: 0.3 }}
+      />
+    </div>
+  );
+}
+
+// Cartão de stat (mini) — totalmente responsivo
+function MiniStat({ label, value, sub, color, Icon }) {
+  return (
+    <motion.div
+      variants={fadeUp}
+      className="card"
+      style={{ padding: '14px 16px', minWidth: 0 }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-4)' }}>
+          {label}
+        </span>
+        <div style={{
+          width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+          background: color + '18',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icon size={14} style={{ color }} />
+        </div>
+      </div>
+      <p style={{ fontSize: 18, fontWeight: 800, color, lineHeight: 1.1, wordBreak: 'break-word' }}>{value}</p>
+      {sub && <p style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 4, lineHeight: 1.3 }}>{sub}</p>}
+    </motion.div>
+  );
+}
+
+// ── Saúde financeira ──────────────────────────────────────────
+
+function FinanceHealth({ income, expense, balance }) {
+  let message, Icon, color, bg, border;
+
+  const savingRate = income > 0 ? ((income - expense) / income) * 100 : null;
+
+  if (income === 0 && expense === 0) {
+    message = 'Nenhuma movimentação este mês.';
+    Icon    = Minus;
+    color   = 'var(--text-4)';
+    bg      = 'var(--bg-muted)';
+    border  = 'var(--border)';
+  } else if (expense > income) {
+    message = `Você gastou ${fmt(expense - income)} a mais do que recebeu este mês.`;
+    Icon    = AlertTriangle;
+    color   = 'var(--red)';
+    bg      = 'var(--red-bg)';
+    border  = 'var(--red-border)';
+  } else if (savingRate !== null && savingRate >= 20) {
+    message = `Você está economizando ${Math.round(savingRate)}% da sua renda. Excelente!`;
+    Icon    = ThumbsUp;
+    color   = 'var(--green)';
+    bg      = 'var(--green-bg)';
+    border  = 'var(--green-border)';
+  } else {
+    message = `Saldo positivo de ${fmt(balance)} este mês.`;
+    Icon    = TrendingUp;
+    color   = 'var(--teal)';
+    bg      = 'rgba(91,188,170,0.08)';
+    border  = 'rgba(91,188,170,0.2)';
+  }
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', gap: 10,
+      background: bg, border: `1px solid ${border}`,
+      borderRadius: 14, padding: '12px 14px',
+    }}>
+      <Icon size={16} style={{ color, flexShrink: 0, marginTop: 1 }} />
+      <p style={{ fontSize: 13, color, fontWeight: 500, lineHeight: 1.4 }}>{message}</p>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════
+
 export default function Dashboard() {
-  const { tasks, habits, balance, totalIncome, totalExpense, goals, agenda, setActiveTab } = useApp();
+  const { tasks, habits, transactions, goals, agenda } = useApp();
   const { currentUser } = useAuth();
+  const { setActiveTab } = useNav();
 
   const todayStr = new Date().toISOString().split('T')[0];
+  const now      = new Date();
+  const MONTHS   = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
-  const normalizedTasks = tasks.map((t) => ({ ...t, status: t.status || (t.completed ? 'done' : 'todo') }));
+  // ── Financeiro do MÊS ATUAL ───────────────────────────────
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const monthTxs    = (transactions || []).filter((t) => (t.date || t.createdAt || '').slice(0, 7) === currentMonthKey);
+  const monthIncome  = monthTxs.filter((t) => t.type === 'income').reduce((s, t) => s + (t.amount || 0), 0);
+  const monthExpense = monthTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + (t.amount || 0), 0);
+  const monthBalance = monthIncome - monthExpense;
+  const monthName    = `${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
+
+  // ── Tarefas ───────────────────────────────────────────────
+  const normalizedTasks = (tasks || []).map((t) => ({ ...t, status: t.status || (t.completed ? 'done' : 'todo') }));
   const doneTasks  = normalizedTasks.filter((t) => t.status === 'done').length;
   const totalTasks = normalizedTasks.length;
   const taskPct    = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
-  const habitsToday = habits.filter((h) => h.completedDates.includes(todayStr)).length;
-  const habitPct    = habits.length > 0 ? Math.round((habitsToday / habits.length) * 100) : 0;
-
-  const overallPct  = Math.round((taskPct + habitPct) / 2);
   const urgentTasks = normalizedTasks.filter((t) => t.status !== 'done' && t.priority === 'high').slice(0, 4);
-  const todayHabits = habits.slice(0, 5);
-  const todayEvents = agenda
+
+  // ── Hábitos ───────────────────────────────────────────────
+  const habitsToday = (habits || []).filter((h) => (h.completedDates || []).includes(todayStr)).length;
+  const habitTotal  = (habits || []).length;
+  const habitPct    = habitTotal > 0 ? Math.round((habitsToday / habitTotal) * 100) : 0;
+  const todayHabits = (habits || []).slice(0, 5);
+
+  // ── Progresso geral ───────────────────────────────────────
+  const overallPct = Math.round((taskPct + habitPct) / 2);
+
+  // ── Agenda ────────────────────────────────────────────────
+  const todayEvents = (agenda || [])
     .filter((e) => e.date?.startsWith(todayStr))
     .sort((a, b) => new Date(a.date) - new Date(b.date))
     .slice(0, 4);
-  const topGoals = [...goals]
+
+  // ── Metas ─────────────────────────────────────────────────
+  const topGoals = [...(goals || [])]
     .filter((g) => g.current < g.target)
     .sort((a, b) => (b.current / b.target) - (a.current / a.target))
     .slice(0, 3);
 
-  const hour = new Date().getHours();
+  // ── Saudação ──────────────────────────────────────────────
+  const hour     = now.getHours();
   const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
   const isYasmin = currentUser?.username === 'yasmin';
 
+  // ── Progresso de gastos no mês ────────────────────────────
+  const spentPct = monthIncome > 0 ? Math.min(100, Math.round((monthExpense / monthIncome) * 100)) : 0;
+
   return (
-    <motion.div className="p-6 lg:p-8" variants={container} initial="initial" animate="animate">
-      <div className="space-y-6">
+    <motion.div
+      style={{ padding: '20px 16px', maxWidth: 900, margin: '0 auto', paddingBottom: 80 }}
+      variants={container}
+      initial="initial"
+      animate="animate"
+    >
+      {/* ── Saudação ──────────────────────────────────────── */}
+      <motion.div variants={fadeUp} style={{ marginBottom: 20 }}>
+        <p style={{ fontSize: 12, color: 'var(--text-4)', marginBottom: 4, textTransform: 'capitalize' }}>
+          {now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+        </p>
+        <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>
+          {greeting},{' '}
+          <span style={{ color: 'var(--accent-light)' }}>{currentUser?.name}</span>!
+        </h2>
+      </motion.div>
 
-        {/* Saudação */}
-        <motion.div variants={item}>
-          <p className="text-sm font-mono mb-1 capitalize" style={{ color: 'var(--text-4)' }}>
-            {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
-          <h2 className="font-bold text-2xl lg:text-3xl" style={{ color: 'var(--text)' }}>
-            {greeting},{' '}
-            <span style={{ color: 'var(--accent-light)' }}>{currentUser?.name}</span>!
-          </h2>
-        </motion.div>
+      {/* ── Stats 4-up ────────────────────────────────────── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, 1fr)',
+        gap: 10,
+        marginBottom: 16,
+      }}
+        className="lg:grid-cols-4"
+      >
+        <MiniStat
+          label="SALDO"
+          value={fmt(monthBalance)}
+          sub={monthName}
+          color={monthBalance >= 0 ? 'var(--green)' : 'var(--red)'}
+          Icon={DollarSign}
+        />
+        <MiniStat
+          label="TAREFAS"
+          value={`${doneTasks}/${totalTasks}`}
+          sub={`${taskPct}% concluídas`}
+          color="var(--blue)"
+          Icon={CheckSquare}
+        />
+        <MiniStat
+          label="HÁBITOS"
+          value={`${habitsToday}/${habitTotal}`}
+          sub={`${habitPct}% hoje`}
+          color="var(--teal)"
+          Icon={Flame}
+        />
+        <MiniStat
+          label="METAS"
+          value={`${topGoals.length}`}
+          sub="em progresso"
+          color="var(--amber)"
+          Icon={Target}
+        />
+      </div>
 
-        {/* Stats — 4 cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard
-            label="SALDO"
-            value={fmt(balance)}
-            sub={`${fmt(totalIncome)} entrada`}
-            color={balance >= 0 ? 'var(--green)' : 'var(--red)'}
-            icon={DollarSign}
-            delay={0.05}
-          />
-          <StatCard
-            label="TAREFAS"
-            value={`${doneTasks}/${totalTasks}`}
-            sub={`${taskPct}% concluídas`}
-            color="var(--blue)"
-            icon={CheckSquare}
-            delay={0.10}
-          />
-          <StatCard
-            label="HÁBITOS"
-            value={`${habitsToday}/${habits.length}`}
-            sub={`${habitPct}% hoje`}
-            color="var(--teal)"
-            icon={Flame}
-            delay={0.15}
-          />
-          <StatCard
-            label="METAS"
-            value={`${topGoals.length}`}
-            sub="em progresso"
-            color="var(--amber)"
-            icon={Target}
-            delay={0.20}
-          />
-        </div>
-
-        {/* Row 2: Tarefas urgentes + Progresso */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <Card className="lg:col-span-2">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Tarefas Urgentes</h3>
-              <motion.button
-                onClick={() => setActiveTab('tasks')}
-                className="text-xs flex items-center gap-1 hover:underline"
-                style={{ color: 'var(--accent-light)' }}
-                whileHover={{ x: 2 }}
-              >
-                Ver todas <ArrowRight size={11} />
-              </motion.button>
+      {/* ── Linha 2: Urgente + Progresso ──────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginBottom: 16 }}
+        className="lg:grid-cols-3-2-1"
+      >
+        {/* Tarefas urgentes */}
+        <Card style={{ gridColumn: 'span 2' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Tarefas Urgentes</h3>
+            <button
+              onClick={() => setActiveTab('tasks')}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--accent-light)', cursor: 'pointer' }}
+            >
+              Ver todas <ArrowRight size={11} />
+            </button>
+          </div>
+          {urgentTasks.length === 0 ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 0', justifyContent: 'center', color: 'var(--text-3)' }}>
+              <CheckCircle2 size={18} style={{ color: 'var(--green)' }} />
+              <span style={{ fontSize: 13 }}>Nenhuma tarefa urgente 🎉</span>
             </div>
-            {urgentTasks.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className="flex items-center gap-3 py-5 justify-center"
-              >
-                <CheckCircle2 size={20} style={{ color: 'var(--green)' }} />
-                <p className="text-sm" style={{ color: 'var(--text-3)' }}>
-                  Nenhuma tarefa urgente! 🎉
-                </p>
-              </motion.div>
-            ) : urgentTasks.map((t, i) => (
-              <motion.div
-                key={t.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.06 }}
-                className="flex items-start gap-3 p-3 rounded-xl border mb-2 last:mb-0"
-                style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}
-              >
-                <Circle size={14} style={{ color: 'var(--red)', marginTop: 2, flexShrink: 0 }} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>{t.title}</p>
-                  {t.description && (
-                    <p className="text-xs truncate mt-0.5" style={{ color: 'var(--text-4)' }}>{t.description}</p>
-                  )}
+          ) : urgentTasks.map((t, i) => (
+            <motion.div
+              key={t.id}
+              initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.06 }}
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+                padding: '10px 12px', borderRadius: 12, marginBottom: 8,
+                background: 'var(--bg-muted)', border: '1px solid var(--border)',
+              }}
+            >
+              <Circle size={13} style={{ color: 'var(--red)', marginTop: 2, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</p>
+                {t.description && (
+                  <p style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.description}</p>
+                )}
+              </div>
+              <span style={{
+                fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 6, flexShrink: 0,
+                background: 'var(--red-bg)', color: 'var(--red)', border: '1px solid var(--red-border)',
+              }}>URGENTE</span>
+            </motion.div>
+          ))}
+        </Card>
+
+        {/* Progresso */}
+        <Card>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 16 }}>Progresso do Dia</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {[
+              { label: 'Tarefas', value: taskPct,  color: 'var(--blue)' },
+              { label: 'Hábitos', value: habitPct, color: 'var(--teal)' },
+            ].map(({ label, value, color }) => (
+              <div key={label}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{label}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color }}>{value}%</span>
                 </div>
-                <span className="tag text-xs shrink-0"
-                  style={{ background: 'var(--red-bg)', color: 'var(--red)', border: '1px solid var(--red-border)' }}>
-                  urgente
-                </span>
-              </motion.div>
+                <ProgressBar value={value} color={color} />
+              </div>
             ))}
-          </Card>
-
-          <Card>
-            <h3 className="font-semibold mb-5" style={{ color: 'var(--text)' }}>Progresso do Dia</h3>
-            <div className="space-y-4">
-              <ProgressRow label="Tarefas" value={taskPct}  color="var(--blue)" />
-              <ProgressRow label="Hábitos" value={habitPct} color="var(--teal)" />
-              <div className="pt-3" style={{ borderTop: '1px solid var(--border)' }}>
-                <p className="label mb-2">GERAL</p>
-                <div className="flex items-center gap-3">
-                  <motion.span
-                    className="font-bold text-4xl"
-                    style={{ color: 'var(--green)' }}
-                    initial={{ opacity: 0, scale: 0.7 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.5, type: 'spring' }}
-                  >
-                    {overallPct}%
-                  </motion.span>
-                  <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--bg-muted)' }}>
-                    <motion.div
-                      className="h-full rounded-full"
-                      style={{ backgroundColor: 'var(--green)' }}
-                      initial={{ width: 0 }}
-                      animate={{ width: `${overallPct}%` }}
-                      transition={{ duration: 1, delay: 0.4, ease: 'easeOut' }}
-                    />
-                  </div>
-                </div>
+            <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+              <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-4)', marginBottom: 10 }}>GERAL</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <motion.span
+                  style={{ fontSize: 34, fontWeight: 800, color: 'var(--green)', lineHeight: 1, flexShrink: 0 }}
+                  initial={{ opacity: 0, scale: 0.7 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.5, type: 'spring' }}
+                >
+                  {overallPct}%
+                </motion.span>
+                <ProgressBar value={overallPct} color="var(--green)" />
               </div>
             </div>
-          </Card>
-        </div>
+          </div>
+        </Card>
+      </div>
 
-        {/* Row 3: Hábitos + Agenda */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <Card>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Hábitos de Hoje</h3>
-              <motion.button onClick={() => setActiveTab('habits')} whileHover={{ x: 2 }}
-                className="text-xs hover:underline flex items-center gap-1"
-                style={{ color: 'var(--teal)' }}>
-                Ver <ArrowRight size={11} />
-              </motion.button>
-            </div>
-            {todayHabits.length === 0 ? (
-              <p className="text-sm text-center py-4" style={{ color: 'var(--text-4)' }}>Nenhum hábito cadastrado</p>
-            ) : (
-              <div className="space-y-2">
-                {todayHabits.map((h, i) => {
-                  const done = h.completedDates.includes(todayStr);
-                  return (
-                    <motion.div
-                      key={h.id}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      className="flex items-center gap-3 p-3 rounded-xl border transition-all"
-                      style={{
-                        background:   done ? 'var(--green-bg)' : 'var(--bg-muted)',
-                        borderColor:  done ? 'var(--green-border)' : 'var(--border)',
-                      }}
-                    >
-                      <span className="text-lg">{h.icon}</span>
-                      <span className={`flex-1 text-sm font-medium ${done ? 'line-through opacity-50' : ''}`}
-                        style={{ color: 'var(--text)' }}>
-                        {h.name}
-                      </span>
-                      {h.streak > 0 && (
-                        <span className="text-xs font-mono" style={{ color: 'var(--amber)' }}>🔥{h.streak}</span>
-                      )}
-                      {done
-                        ? <CheckCircle2 size={15} style={{ color: 'var(--green)' }} />
-                        : <Circle size={15} style={{ color: 'var(--text-4)' }} />
-                      }
-                    </motion.div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-
-          <Card>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Agenda de Hoje</h3>
-              <motion.button onClick={() => setActiveTab('agenda')} whileHover={{ x: 2 }}
-                className="text-xs hover:underline flex items-center gap-1"
-                style={{ color: 'var(--accent-light)' }}>
-                Ver <ArrowRight size={11} />
-              </motion.button>
-            </div>
-            {todayEvents.length === 0 ? (
-              <div className="flex items-center gap-3 py-5 justify-center" style={{ color: 'var(--text-4)' }}>
-                <Calendar size={18} />
-                <p className="text-sm">Sem eventos hoje</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {todayEvents.map((ev, i) => (
+      {/* ── Linha 3: Hábitos + Agenda ─────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginBottom: 16 }}
+        className="lg:grid-cols-2"
+      >
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Hábitos de Hoje</h3>
+            <button onClick={() => setActiveTab('habits')}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--teal)', cursor: 'pointer' }}>
+              Ver <ArrowRight size={11} />
+            </button>
+          </div>
+          {todayHabits.length === 0 ? (
+            <p style={{ fontSize: 13, textAlign: 'center', padding: '16px 0', color: 'var(--text-4)' }}>Nenhum hábito cadastrado</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {todayHabits.map((h, i) => {
+                const done = (h.completedDates || []).includes(todayStr);
+                return (
                   <motion.div
-                    key={ev.id}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
+                    key={h.id}
+                    initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.05 }}
-                    className="flex items-start gap-3 p-3 rounded-xl border"
-                    style={{ borderColor: (ev.color || 'var(--border-md)') + '30', backgroundColor: (ev.color || 'var(--bg-muted)') + '0D' }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 12px', borderRadius: 12, border: '1px solid',
+                      background: done ? 'var(--green-bg)' : 'var(--bg-muted)',
+                      borderColor: done ? 'var(--green-border)' : 'var(--border)',
+                    }}
                   >
-                    <div className="w-1 self-stretch rounded-full shrink-0"
-                      style={{ backgroundColor: ev.color || 'var(--blue)' }} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>{ev.title}</p>
-                      <p className="text-xs font-mono mt-0.5 flex items-center gap-1"
-                        style={{ color: ev.color || 'var(--text-3)' }}>
-                        <Clock size={10} />
-                        {fmtTime(ev.date)}{ev.endTime ? ` – ${ev.endTime}` : ''}
-                      </p>
-                    </div>
+                    <span style={{ fontSize: 18, flexShrink: 0 }}>{h.icon || '✨'}</span>
+                    <span style={{
+                      flex: 1, fontSize: 13, fontWeight: 500,
+                      color: 'var(--text)', textDecoration: done ? 'line-through' : 'none',
+                      opacity: done ? 0.5 : 1,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {h.name}
+                    </span>
+                    {h.streak > 0 && <span style={{ fontSize: 11, color: 'var(--amber)', flexShrink: 0 }}>🔥{h.streak}</span>}
+                    {done
+                      ? <CheckCircle2 size={15} style={{ color: 'var(--green)', flexShrink: 0 }} />
+                      : <Circle size={15} style={{ color: 'var(--text-4)', flexShrink: 0 }} />
+                    }
                   </motion.div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
 
-        {/* Row 4: Financeiro + Metas */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <Card>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Financeiro</h3>
-              <motion.button onClick={() => setActiveTab('finance')} whileHover={{ x: 2 }}
-                className="text-xs hover:underline flex items-center gap-1"
-                style={{ color: 'var(--accent-light)' }}>
-                Ver <ArrowRight size={11} />
-              </motion.button>
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Agenda de Hoje</h3>
+            <button onClick={() => setActiveTab('tasks')}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--accent-light)', cursor: 'pointer' }}>
+              Ver <ArrowRight size={11} />
+            </button>
+          </div>
+          {todayEvents.length === 0 ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 0', justifyContent: 'center', color: 'var(--text-4)' }}>
+              <Calendar size={17} />
+              <span style={{ fontSize: 13 }}>Sem eventos hoje</span>
             </div>
-            <div className="rounded-xl p-4 mb-4 border"
-              style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}>
-              <div className="flex items-center gap-2 mb-2">
-                <Wallet size={13} style={{ color: 'var(--text-3)' }} />
-                <p className="label">SALDO TOTAL</p>
-              </div>
-              <motion.p
-                className="font-bold text-3xl"
-                style={{ color: balance >= 0 ? 'var(--green)' : 'var(--red)' }}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.3, type: 'spring' }}
-              >
-                {fmt(balance)}
-              </motion.p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {todayEvents.map((ev, i) => (
+                <motion.div key={ev.id}
+                  initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                    padding: '10px 12px', borderRadius: 12,
+                    border: `1px solid ${(ev.color || 'var(--blue)') + '30'}`,
+                    background: (ev.color || 'var(--bg-muted)') + '0D',
+                  }}
+                >
+                  <div style={{ width: 3, alignSelf: 'stretch', borderRadius: 99, background: ev.color || 'var(--blue)', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</p>
+                    <p style={{ fontSize: 11, color: ev.color || 'var(--text-3)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Clock size={10} />
+                      {fmtTime(ev.date)}{ev.endTime ? ` – ${ev.endTime}` : ''}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl p-3"
-                style={{ background: 'var(--green-bg)', border: '1px solid var(--green-border)' }}>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <TrendingUp size={12} style={{ color: 'var(--green)' }} />
-                  <span className="text-xs" style={{ color: 'var(--text-3)' }}>Entradas</span>
-                </div>
-                <p className="font-bold text-base" style={{ color: 'var(--green)' }}>{fmt(totalIncome)}</p>
-              </div>
-              <div className="rounded-xl p-3"
-                style={{ background: 'var(--red-bg)', border: '1px solid var(--red-border)' }}>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <TrendingDown size={12} style={{ color: 'var(--red)' }} />
-                  <span className="text-xs" style={{ color: 'var(--text-3)' }}>Saídas</span>
-                </div>
-                <p className="font-bold text-base" style={{ color: 'var(--red)' }}>{fmt(totalExpense)}</p>
-              </div>
-            </div>
-          </Card>
+          )}
+        </Card>
+      </div>
 
-          <Card>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Metas em Progresso</h3>
-              <motion.button onClick={() => setActiveTab('goals')} whileHover={{ x: 2 }}
-                className="text-xs hover:underline flex items-center gap-1"
-                style={{ color: 'var(--amber)' }}>
-                Ver <ArrowRight size={11} />
-              </motion.button>
+      {/* ── Linha 4: Financeiro + Metas ───────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}
+        className="lg:grid-cols-2"
+      >
+        {/* Financeiro do mês */}
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Financeiro</h3>
+              <p style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 1 }}>{monthName}</p>
             </div>
-            {topGoals.length === 0 ? (
-              <p className="text-sm text-center py-4" style={{ color: 'var(--text-4)' }}>Nenhuma meta</p>
-            ) : (
-              <div className="space-y-4">
-                {topGoals.map((g, i) => {
-                  const pct = Math.min(100, Math.round((g.current / g.target) * 100));
-                  return (
-                    <motion.div
-                      key={g.id}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.07 }}
-                    >
-                      <div className="flex justify-between text-xs mb-1.5">
-                        <span className="font-medium" style={{ color: 'var(--text-2)' }}>{g.title}</span>
-                        <span className="font-mono font-semibold" style={{ color: g.color || 'var(--amber)' }}>{pct}%</span>
-                      </div>
-                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-muted)' }}>
-                        <motion.div
-                          className="h-full rounded-full"
-                          initial={{ width: 0 }}
-                          animate={{ width: `${pct}%` }}
-                          transition={{ duration: 0.8, delay: 0.2 + i * 0.1, ease: 'easeOut' }}
-                          style={{ backgroundColor: g.color || 'var(--amber)' }}
-                        />
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-        </div>
+            <button onClick={() => setActiveTab('finance')}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--accent-light)', cursor: 'pointer' }}>
+              Ver <ArrowRight size={11} />
+            </button>
+          </div>
 
+          {/* Saldo hero */}
+          <div style={{
+            background: monthBalance >= 0 ? 'var(--green-bg)' : 'var(--red-bg)',
+            border: `1px solid ${monthBalance >= 0 ? 'var(--green-border)' : 'var(--red-border)'}`,
+            borderRadius: 14, padding: '16px', marginBottom: 12, textAlign: 'center',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 }}>
+              <Wallet size={13} style={{ color: 'var(--text-3)' }} />
+              <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-4)' }}>SALDO DO MÊS</p>
+            </div>
+            <motion.p
+              style={{ fontSize: 28, fontWeight: 800, color: monthBalance >= 0 ? 'var(--green)' : 'var(--red)', letterSpacing: '-0.02em' }}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3, type: 'spring' }}
+            >
+              {fmt(monthBalance)}
+            </motion.p>
+          </div>
+
+          {/* Entradas / Saídas — empilhados em mobile, lado a lado em md+ */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 12 }}>
+            <div style={{ background: 'var(--green-bg)', border: '1px solid var(--green-border)', borderRadius: 12, padding: '10px 12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <TrendingUp size={12} style={{ color: 'var(--green)' }} />
+                <span style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 600 }}>Entradas</span>
+              </div>
+              <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--green)', wordBreak: 'break-word' }}>{fmt(monthIncome)}</p>
+            </div>
+            <div style={{ background: 'var(--red-bg)', border: '1px solid var(--red-border)', borderRadius: 12, padding: '10px 12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <TrendingDown size={12} style={{ color: 'var(--red)' }} />
+                <span style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 600 }}>Saídas</span>
+              </div>
+              <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--red)', wordBreak: 'break-word' }}>{fmt(monthExpense)}</p>
+            </div>
+          </div>
+
+          {/* Barra de progresso de gastos */}
+          {monthIncome > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 11, color: 'var(--text-4)' }}>Gastos vs. receita</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: spentPct > 100 ? 'var(--red)' : spentPct > 80 ? 'var(--amber)' : 'var(--green)' }}>
+                  {spentPct}%
+                </span>
+              </div>
+              <div style={{ height: 6, background: 'var(--bg-muted)', borderRadius: 99, overflow: 'hidden' }}>
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(spentPct, 100)}%` }}
+                  transition={{ duration: 0.9, ease: 'easeOut', delay: 0.4 }}
+                  style={{
+                    height: '100%', borderRadius: 99,
+                    background: spentPct > 100 ? 'var(--red)' : spentPct > 80 ? 'var(--amber)' : 'var(--green)',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Status de saúde */}
+          <FinanceHealth income={monthIncome} expense={monthExpense} balance={monthBalance} />
+        </Card>
+
+        {/* Metas */}
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Metas em Progresso</h3>
+            <button onClick={() => setActiveTab('goals')}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--amber)', cursor: 'pointer' }}>
+              Ver <ArrowRight size={11} />
+            </button>
+          </div>
+          {topGoals.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-4)' }}>
+              <Target size={28} style={{ margin: '0 auto 8px', opacity: 0.3 }} />
+              <p style={{ fontSize: 13 }}>Nenhuma meta em progresso</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {topGoals.map((g, i) => {
+                const pct = Math.min(100, Math.round(((g.current || 0) / (g.target || 1)) * 100));
+                return (
+                  <motion.div key={g.id}
+                    initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.07 }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{g.title}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: g.color || 'var(--amber)', flexShrink: 0 }}>{pct}%</span>
+                    </div>
+                    <ProgressBar value={pct} color={g.color || 'var(--amber)'} />
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
       </div>
 
       {isYasmin && <CatMascot />}
