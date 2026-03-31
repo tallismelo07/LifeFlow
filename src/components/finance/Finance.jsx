@@ -2,7 +2,7 @@
 // Modelo: title · amount · installmentValue · type · category · bank · date
 // IA: parser natural de texto em português
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Trash2, TrendingUp, TrendingDown, Wallet,
@@ -31,12 +31,21 @@ const CATEGORIES = [
 ];
 
 const BANKS = [
-  { value: 'nubank',   label: 'Nubank',   color: '#8A05BE' },
-  { value: 'itau',     label: 'Itaú',     color: '#FF6200' },
-  { value: 'inter',    label: 'Inter',    color: '#FF7A00' },
-  { value: 'bradesco', label: 'Bradesco', color: '#CC092F' },
-  { value: 'caixa',    label: 'Caixa',    color: '#005BAC' },
-  { value: 'outro',    label: 'Outro',    color: '#888888' },
+  { value: 'nubank',      label: 'Nubank',        color: '#8A05BE' },
+  { value: 'itau',        label: 'Itaú',          color: '#FF6200' },
+  { value: 'inter',       label: 'Inter',         color: '#FF7A00' },
+  { value: 'bradesco',    label: 'Bradesco',      color: '#CC092F' },
+  { value: 'bb',          label: 'Banco do Brasil', color: '#FFDD00', textColor: '#1a1a1a' },
+  { value: 'santander',   label: 'Santander',     color: '#EC0000' },
+  { value: 'caixa',       label: 'Caixa',         color: '#005BAC' },
+  { value: 'mercadopago', label: 'Mercado Pago',  color: '#00BCFF' },
+  { value: 'picpay',      label: 'PicPay',        color: '#11C76F' },
+  { value: 'c6',          label: 'C6 Bank',       color: '#222222' },
+  { value: 'neon',        label: 'Neon',          color: '#00D1AC' },
+  { value: 'pagbank',     label: 'PagBank',       color: '#F8A100' },
+  { value: 'xp',          label: 'XP',            color: '#000000' },
+  { value: 'btg',         label: 'BTG Pactual',   color: '#0052CC' },
+  { value: 'outro',       label: 'Outro',         color: '#888888' },
 ];
 
 const getCat    = (v) => CATEGORIES.find((c) => c.value === v) || CATEGORIES[CATEGORIES.length - 1];
@@ -86,11 +95,20 @@ function parseFinanceInput(text) {
 
   /* ── 4. Banco ─────────────────────────────────────── */
   let bank = 'outro';
-  if (lower.includes('nubank') || lower.includes('nu '))          bank = 'nubank';
-  else if (lower.includes('itaú') || lower.includes('itau'))      bank = 'itau';
-  else if (lower.includes('inter'))                                bank = 'inter';
-  else if (lower.includes('bradesco'))                             bank = 'bradesco';
-  else if (lower.includes('caixa'))                                bank = 'caixa';
+  if      (lower.includes('nubank')                             ) bank = 'nubank';
+  else if (lower.includes('itaú')    || lower.includes('itau') ) bank = 'itau';
+  else if (lower.includes('inter')                              ) bank = 'inter';
+  else if (lower.includes('bradesco')                           ) bank = 'bradesco';
+  else if (lower.includes('banco do brasil') || lower.includes(' bb ') || lower.includes('bb banco')) bank = 'bb';
+  else if (lower.includes('santander')                          ) bank = 'santander';
+  else if (lower.includes('caixa')                              ) bank = 'caixa';
+  else if (lower.includes('mercado pago') || lower.includes('mercadopago')) bank = 'mercadopago';
+  else if (lower.includes('picpay')                             ) bank = 'picpay';
+  else if (lower.includes('c6')                                 ) bank = 'c6';
+  else if (lower.includes('neon')                               ) bank = 'neon';
+  else if (lower.includes('pagbank') || lower.includes('pagseguro')) bank = 'pagbank';
+  else if (lower.includes(' xp ')    || lower.includes('xp invest')) bank = 'xp';
+  else if (lower.includes('btg')                                ) bank = 'btg';
 
   /* ── 5. Título ────────────────────────────────────── */
   let title = raw;
@@ -197,16 +215,16 @@ function TxFormModal({ initial = BLANK_TX, onSave, onClose, modalTitle = 'Nova T
               <input className="input-base" placeholder="Ex: Supermercado, Netflix, Salário..." value={form.title} onChange={(e) => set('title', e.target.value)} required />
             </div>
 
-            {/* Valor + Parcela */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-4)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Valor Total *</label>
-                <input className="input-base" type="number" step="0.01" min="0.01" placeholder="R$ 0,00" value={form.amount} onChange={(e) => set('amount', e.target.value)} required />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-4)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Parcela (R$)</label>
-                <input className="input-base" type="number" step="0.01" min="0" placeholder="Opcional" value={form.installmentValue} onChange={(e) => set('installmentValue', e.target.value)} />
-              </div>
+            {/* Valor */}
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-4)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Valor Total *</label>
+              <input className="input-base" type="number" step="0.01" min="0.01" placeholder="R$ 0,00" value={form.amount} onChange={(e) => set('amount', e.target.value)} required inputMode="decimal" />
+            </div>
+
+            {/* Parcela */}
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-4)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Valor da Parcela <span style={{ fontWeight: 400, textTransform: 'none' }}>(opcional)</span></label>
+              <input className="input-base" type="number" step="0.01" min="0" placeholder="Ex: R$ 100,00" value={form.installmentValue} onChange={(e) => set('installmentValue', e.target.value)} inputMode="decimal" />
             </div>
 
             {/* Categoria */}
@@ -226,18 +244,18 @@ function TxFormModal({ initial = BLANK_TX, onSave, onClose, modalTitle = 'Nova T
               </div>
             </div>
 
-            {/* Banco + Data */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-4)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Banco</label>
-                <select className="input-base" value={form.bank} onChange={(e) => set('bank', e.target.value)}>
-                  {BANKS.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-4)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Data</label>
-                <input className="input-base" type="date" value={form.date} onChange={(e) => set('date', e.target.value)} />
-              </div>
+            {/* Banco */}
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-4)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Banco</label>
+              <select className="input-base" value={form.bank} onChange={(e) => set('bank', e.target.value)}>
+                {BANKS.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
+              </select>
+            </div>
+
+            {/* Data */}
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-4)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Data</label>
+              <input className="input-base" type="date" value={form.date} onChange={(e) => set('date', e.target.value)} />
             </div>
 
             <button type="submit" disabled={!valid} className="btn-primary" style={{ width: '100%', marginTop: 6, fontSize: 14, padding: '12px 0' }}>
@@ -421,10 +439,24 @@ function TransactionCard({ tx, onDelete, onEdit }) {
 // ═══════════════════════════════════════════════════════════════
 
 function TabOverview({ transactions, onGoToTx }) {
-  const totalIn  = transactions.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const totalOut = transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  // Visão geral = apenas o mês corrente
+  const now          = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const monthName    = `${MONTHS_PT[now.getMonth()]} ${now.getFullYear()}`;
+
+  const thisMonth = transactions.filter((t) => {
+    const d = (t.date || t.createdAt || '').slice(0, 7);
+    return d === currentMonth;
+  });
+
+  const totalIn  = thisMonth.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const totalOut = thisMonth.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const balance  = totalIn - totalOut;
-  const recent   = [...transactions].sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt)).slice(0, 5);
+
+  // Recentes: 5 transações mais novas de todos os meses
+  const recent = [...transactions]
+    .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt))
+    .slice(0, 5);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -437,7 +469,7 @@ function TabOverview({ transactions, onGoToTx }) {
           borderRadius: 20, padding: '24px 20px', textAlign: 'center',
         }}
       >
-        <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Saldo Total</p>
+        <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Saldo em {monthName}</p>
         <p style={{ fontSize: 36, fontWeight: 800, color: balance >= 0 ? 'var(--green)' : 'var(--red)', letterSpacing: '-0.02em' }}>
           {fmtBRL(balance)}
         </p>
@@ -461,8 +493,8 @@ function TabOverview({ transactions, onGoToTx }) {
         ))}
       </div>
 
-      {/* Category breakdown */}
-      <CategoryBreakdown transactions={transactions} />
+      {/* Category breakdown — mês atual */}
+      <CategoryBreakdown transactions={thisMonth} />
 
       {/* Recent */}
       {recent.length > 0 && (
