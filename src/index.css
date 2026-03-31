@@ -277,6 +277,45 @@ html.light {
     border: 1px solid var(--border);
     @apply rounded-2xl p-4 flex flex-col gap-2;
   }
+
+  /* ── Safe tap targets (mobile) ───────────────────────────── */
+  button, [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* ── Select (native) ─────────────────────────────────────── */
+  select.input-base {
+    cursor: pointer;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236c757d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px;
+  }
+
+  /* ── Textarea (native) ───────────────────────────────────── */
+  textarea.input-base {
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.6;
+  }
+
+  /* ── Page container padrão ───────────────────────────────── */
+  .page-container {
+    @apply p-5 lg:p-8;
+    max-width: 900px;
+  }
+
+  /* ── Section header ──────────────────────────────────────── */
+  .section-header {
+    @apply flex items-center justify-between gap-4 flex-wrap mb-5;
+  }
+
+  /* ── Empty state ─────────────────────────────────────────── */
+  .empty-state {
+    @apply flex flex-col items-center justify-center py-16 gap-3 text-center;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════

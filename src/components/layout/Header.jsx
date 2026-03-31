@@ -1,5 +1,5 @@
 // src/components/layout/Header.jsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNav }   from '../../context/NavContext';
 import { useAuth }  from '../../context/AuthContext';
@@ -8,18 +8,84 @@ import { changePasswordRequest } from '../../services/authService';
 import {
   Menu, Search, LogOut, Shield, Sun, Moon,
   KeyRound, Eye, EyeOff, X, CheckCircle2, Loader2, User, Save,
+  CloudOff,
 } from 'lucide-react';
 
 
 const TITLES = {
+  home:      { title: 'Início',      sub: 'Bem-vindo de volta'              },
+  checkin:   { title: 'Check-in',    sub: 'Como foi seu dia?'               },
   dashboard: { title: 'Dashboard',   sub: 'Visão geral do seu dia'          },
-  tasks:     { title: 'Tarefas',     sub: 'Tarefas e agenda do dia'         },
+  tasks:     { title: 'Tarefas',     sub: 'Organize sua lista de afazeres'  },
   habits:    { title: 'Hábitos',     sub: 'Construa sua rotina'             },
+  agenda:    { title: 'Agenda',      sub: 'Seus eventos e compromissos'     },
   finance:   { title: 'Financeiro',  sub: 'Controle de receitas e despesas' },
   goals:     { title: 'Metas',       sub: 'Acompanhe seus objetivos'        },
   admin:     { title: 'Painel Admin',sub: 'Gestão de usuários'              },
   feedback:  { title: 'Sugestões',   sub: 'Envie ideias e feedback'         },
 };
+
+// ── Save status pill — escuta eventos customizados do AppContext ──────────────
+function SaveIndicator() {
+  const [status, setStatus] = useState(null); // null | 'saving' | 'saved' | 'error'
+
+  useEffect(() => {
+    let timer;
+    const onSaving = () => { clearTimeout(timer); setStatus('saving'); };
+    const onSaved  = () => {
+      clearTimeout(timer);
+      setStatus('saved');
+      timer = setTimeout(() => setStatus(null), 2200);
+    };
+    const onError  = () => {
+      clearTimeout(timer);
+      setStatus('error');
+      timer = setTimeout(() => setStatus(null), 3500);
+    };
+
+    window.addEventListener('lf:save:start', onSaving);
+    window.addEventListener('lf:save:done',  onSaved);
+    window.addEventListener('lf:save:error', onError);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('lf:save:start', onSaving);
+      window.removeEventListener('lf:save:done',  onSaved);
+      window.removeEventListener('lf:save:error', onError);
+    };
+  }, []);
+
+  return (
+    <AnimatePresence>
+      {status && (
+        <motion.div
+          key={status}
+          initial={{ opacity: 0, scale: 0.85, y: -4 }}
+          animate={{ opacity: 1, scale: 1,    y: 0  }}
+          exit={{   opacity: 0, scale: 0.85, y: -4  }}
+          transition={{ duration: 0.18 }}
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-medium"
+          style={{
+            background: status === 'error'  ? 'var(--red-bg)'
+                      : status === 'saved'  ? 'var(--green-bg)'
+                      :                       'var(--blue-bg)',
+            border: `1px solid ${
+                      status === 'error'  ? 'var(--red-border)'
+                      : status === 'saved'  ? 'var(--green-border)'
+                      :                       'var(--blue-border)'}`,
+            color:  status === 'error'  ? 'var(--red)'
+                  : status === 'saved'  ? 'var(--green)'
+                  :                       'var(--text-3)',
+          }}
+        >
+          {status === 'saving' && <Loader2 size={11} className="animate-spin" />}
+          {status === 'saved'  && <CheckCircle2 size={11} />}
+          {status === 'error'  && <CloudOff size={11} />}
+          {status === 'saving' ? 'Salvando…' : status === 'saved' ? 'Salvo' : 'Erro ao salvar'}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
 
 // ── Modal Minha Conta (perfil + alterar senha) ───────────────────────────────
 
@@ -323,6 +389,7 @@ export default function Header({ onOpenCmd }) {
 
         {/* Right: controls */}
         <div className="flex items-center gap-2">
+          <SaveIndicator />
 
           {/* User badge — clicável para abrir modal de conta */}
           {currentUser && (

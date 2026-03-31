@@ -53,12 +53,18 @@ function saveLocal(username, data) {
   try { localStorage.setItem(lsKey(username), JSON.stringify(data)); } catch {}
 }
 
+// ── Dispara eventos para o indicador visual do Header ────────
+const dispatchSaveEvent = (type) =>
+  window.dispatchEvent(new Event(`lf:save:${type}`));
+
 // ── Salva no backend com retry automático ─────────────────────
 async function saveWithRetry(data, maxAttempts = 3) {
+  dispatchSaveEvent('start');
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       await saveDataRequest(data);
       console.log(`[AppContext] ✓ Salvo (tentativa ${attempt}) total=${countItems(data)}`);
+      dispatchSaveEvent('done');
       return { ok: true };
     } catch (err) {
       console.warn(`[AppContext] ✗ Falha ao salvar (${attempt}/${maxAttempts}):`, err.message);
@@ -66,6 +72,7 @@ async function saveWithRetry(data, maxAttempts = 3) {
     }
   }
   console.error('[AppContext] ✗✗ Falha persistente no servidor');
+  dispatchSaveEvent('error');
   return { ok: false };
 }
 
@@ -118,55 +125,66 @@ export function AppProvider({ children }) {
 
     console.log('[AppContext] 🔄 Sincronização inicial...');
 
-    getDataRequest()
-      .then((serverData) => {
-        if (!serverData) {
-          dataLoaded.current = true;
-          return;
-        }
+    const doSync = (attempt = 1) => {
+      getDataRequest()
+        .then((serverData) => {
+          if (!serverData) {
+            dataLoaded.current = true;
+            return;
+          }
 
-        const serverTotal = countItems(serverData);
-        const localData   = loadLocal(username);
-        const localTotal  = countItems(localData);
+          const serverTotal = countItems(serverData);
+          const localData   = loadLocal(username);
+          const localTotal  = countItems(localData);
 
-        console.log(`[AppContext] Servidor: ${serverTotal} | Local: ${localTotal}`);
+          console.log(`[AppContext] Servidor: ${serverTotal} | Local: ${localTotal}`);
 
-        if (serverTotal === 0 && localTotal > 0) {
-          // Caso A: servidor vazio mas local tem dados → upload de recuperação
-          console.log('[AppContext] ⚠ Upload de recuperação...');
-          saveWithRetry(localData).then(({ ok }) => {
-            if (ok) { lastServerTs.current = new Date().toISOString(); pendingChanges.current = false; }
-          });
-          dataLoaded.current = true;
-          return;
-        }
+          if (serverTotal === 0 && localTotal > 0) {
+            // Caso A: servidor vazio mas local tem dados → upload de recuperação
+            console.log('[AppContext] ⚠ Upload de recuperação...');
+            saveWithRetry(localData).then(({ ok }) => {
+              if (ok) { lastServerTs.current = new Date().toISOString(); pendingChanges.current = false; }
+            });
+            dataLoaded.current = true;
+            return;
+          }
 
-        if (serverTotal === 0 && localTotal === 0) {
-          // Caso D: novo usuário — sem dados em lugar nenhum
+          if (serverTotal === 0 && localTotal === 0) {
+            // Caso D: novo usuário — sem dados em lugar nenhum
+            lastServerTs.current = serverData.updated_at || null;
+            dataLoaded.current = true;
+            return;
+          }
+
+          if (pendingChanges.current) {
+            // Caso C: usuário editou durante o carregamento — mantém local e sobe
+            dataLoaded.current = true;
+            return;
+          }
+
+          // Caso B: servidor tem dados → aplica no estado
+          const { updated_at: _, ...rest } = serverData;
+          const merged = { ...emptyData(), ...rest };
           lastServerTs.current = serverData.updated_at || null;
+
+          setData(merged);
+          saveLocal(username, merged);
           dataLoaded.current = true;
-          return;
-        }
+        })
+        .catch((err) => {
+          console.warn(`[AppContext] Sync inicial falhou (tentativa ${attempt}):`, err.message);
+          // Retry automático após cold start do Render (máx 2 tentativas, 8s de espera)
+          if (attempt < 2 && !pendingChanges.current) {
+            console.log('[AppContext] Reagendando sync em 8s...');
+            setTimeout(() => doSync(attempt + 1), 8_000);
+          } else {
+            dataLoaded.current = true; // offline: usa localStorage, permite saves futuros
+            console.warn('[AppContext] Usando localStorage como fallback.');
+          }
+        });
+    };
 
-        if (pendingChanges.current) {
-          // Caso C: usuário editou durante o carregamento — mantém local e sobe
-          dataLoaded.current = true;
-          return;
-        }
-
-        // Caso B: servidor tem dados → aplica no estado
-        const { updated_at: _, ...rest } = serverData;
-        const merged = { ...emptyData(), ...rest };
-        lastServerTs.current = serverData.updated_at || null;
-
-        setData(merged);
-        saveLocal(username, merged);
-        dataLoaded.current = true;
-      })
-      .catch((err) => {
-        dataLoaded.current = true; // offline: usa localStorage, permite saves futuros
-        console.warn('[AppContext] Offline — usando localStorage:', err.message);
-      });
+    doSync();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
@@ -205,8 +223,15 @@ export function AppProvider({ children }) {
 
     const id = setInterval(poll, 5_000);
     const onVisible = () => { if (document.visibilityState === 'visible') poll(); };
+    // window.focus cobre o caso de retornar ao app após Alt+Tab (desktop)
+    const onFocus = () => poll();
     document.addEventListener('visibilitychange', onVisible);
-    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [username]);
 
   // ── SAVE DEBOUNCED — 400ms ────────────────────────────────
