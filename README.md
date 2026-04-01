@@ -58,17 +58,6 @@ npm run dev
 # Abre em http://localhost:5173
 ```
 
----
-
-## Usuários
-
-| Usuário | Senha | Papel |
-|---------|-------|-------|
-| tallis  | 0724  | Admin |
-| yasmin  | 1234  | Usuário |
-| pedro   | 123   | Usuário |
-
----
 
 ## Novidades v3.0
 
