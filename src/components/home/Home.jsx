@@ -44,15 +44,16 @@ function getGreeting() {
   return                         { text: 'Boa madrugada', Icon: Moon    };
 }
 
-// ── Streak (sequência de check-ins) ─────────────────────────
+// ── Streak — apenas dias com completed=true ──────────────────
 function calcStreak(checkins) {
-  if (!checkins.length) return 0;
-  const set  = new Set(checkins.map((c) => c.date));
+  // Filtra apenas os dias realmente finalizados
+  const completed = checkins.filter((c) => c.completed);
+  if (!completed.length) return 0;
+  const set   = new Set(completed.map((c) => c.date));
   const today = new Date();
-  let streak = 0;
-  const cur  = new Date(today);
+  let streak  = 0;
+  const cur   = new Date(today);
 
-  // Se não tem check-in hoje, começa do ontem
   const todayStr = cur.toISOString().split('T')[0];
   if (!set.has(todayStr)) cur.setDate(cur.getDate() - 1);
 
@@ -64,9 +65,10 @@ function calcStreak(checkins) {
   return streak;
 }
 
-// ── Grid de atividade (estilo GitHub) ───────────────────────
+// ── Grid de atividade — apenas dias finalizados (completed=true) ──
 function buildGrid(checkins) {
-  const activeSet = new Set(checkins.map((c) => c.date));
+  // Só conta dias onde o usuário clicou em "Finalizar Dia"
+  const activeSet = new Set(checkins.filter((c) => c.completed).map((c) => c.date));
   const today     = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -108,7 +110,7 @@ function getMonthLabels(weeks) {
 function ActivityGrid({ checkins }) {
   const weeks       = buildGrid(checkins);
   const monthLabels = getMonthLabels(weeks);
-  const total       = checkins.length;
+  const total = checkins.filter((c) => c.completed).length;
 
   return (
     <div>
@@ -287,7 +289,8 @@ export default function Home() {
   const doneTasks      = (tasks  || []).filter((t) => t.completed || t.status === 'done').length;
   const habitsToday    = (habits || []).filter((h) => (h.completedDates || []).includes(todayStr)).length;
   const totalHabits    = (habits || []).length;
-  const checkinToday   = checkins.find((c) => c.date === todayStr);
+  // check-in de hoje conta apenas se foi finalizado
+  const checkinToday   = checkins.find((c) => c.date === todayStr && c.completed);
 
   const firstName = (currentUser?.name || 'você').split(' ')[0];
 
@@ -390,8 +393,8 @@ export default function Home() {
           />
           <StatCard
             icon={TrendingUp}
-            label="Check-ins totais"
-            value={checkins.length}
+            label="Dias finalizados"
+            value={checkins.filter((c) => c.completed).length}
           />
         </div>
 

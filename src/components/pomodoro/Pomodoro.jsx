@@ -1,39 +1,88 @@
-// src/components/pomodoro/Pomodoro.jsx
-// Timer Pomodoro com sessões de foco, pausas curtas e longas
+// src/components/pomodoro/Pomodoro.jsx — v2
+// Visual clean, minimalista, centralizado
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { Card, Button, Progress } from '../ui';
-import { Play, Pause, RotateCcw, Settings, Coffee, Brain, Zap } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Play, Pause, RotateCcw } from 'lucide-react';
 
-const MODES = {
-  focus:       { label: 'Foco',         minutes: 25, color: 'var(--green)', icon: Brain },
-  shortBreak:  { label: 'Pausa Curta',  minutes: 5,  color: '#5B8DEF', icon: Coffee },
-  longBreak:   { label: 'Pausa Longa',  minutes: 15, color: '#2DD4BF', icon: Coffee },
-};
+// ── Formata segundos → MM:SS ────────────────────────────────
+const fmt = (s) =>
+  `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
-// Formata segundos em MM:SS
-const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+// ── Web Audio — sons simples sem arquivos externos ───────────
+function createAudioCtx() {
+  try { return new (window.AudioContext || window['webkitAudioContext'])(); } catch { return null; }
+}
+
+function playSound(type) {
+  const ctx = createAudioCtx();
+  if (!ctx) return;
+  const gain = ctx.createGain();
+  gain.connect(ctx.destination);
+
+  if (type === 'sino') {
+    // Sino: onda senoidal suave com decay
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.8);
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+    osc.connect(gain);
+    osc.start();
+    osc.stop(ctx.currentTime + 1.2);
+  } else if (type === 'digital') {
+    // Digital: beep curto e limpo
+    [0, 0.15, 0.3].forEach((delay) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.value = 660;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.15, ctx.currentTime + delay);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.1);
+      osc.connect(g);
+      g.connect(ctx.destination);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.1);
+    });
+  } else {
+    // Calmo: tom suave duplo
+    [440, 550].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const g = ctx.createGain();
+      const t = ctx.currentTime + i * 0.4;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.2, t + 0.1);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+      osc.connect(g);
+      g.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.9);
+    });
+  }
+}
+
+// ── Constantes ───────────────────────────────────────────────
+const DEFAULT_MINS = { foco: 25, pausa: 5, rounds: 4 };
 
 export default function Pomodoro() {
-  const [mode, setMode] = useState('focus');
-  const [timeLeft, setTimeLeft] = useState(MODES.focus.minutes * 60);
-  const [running, setRunning] = useState(false);
-  const [sessions, setSessions] = useState(0);         // Pomodoros completos
-  const [totalFocusMin, setTotalFocusMin] = useState(0);
-  const [showSettings, setShowSettings] = useState(false);
-  const [customMins, setCustomMins] = useState({ focus: 25, shortBreak: 5, longBreak: 15 });
-  const [task, setTask] = useState('');
+  const [mins,      setMins]      = useState(DEFAULT_MINS);
+  const [mode,      setMode]      = useState('foco');   // 'foco' | 'pausa'
+  const [timeLeft,  setTimeLeft]  = useState(DEFAULT_MINS.foco * 60);
+  const [running,   setRunning]   = useState(false);
+  const [sessions,  setSessions]  = useState(0);
+  const [totalMin,  setTotalMin]  = useState(0);
+  const [sound,     setSound]     = useState('sino');
+  const [history,   setHistory]   = useState([]);       // { type, mins, ts }
 
   const intervalRef = useRef(null);
-  const startedAt = useRef(null);
 
-  const totalSeconds = customMins[mode] * 60;
-  const progress = ((totalSeconds - timeLeft) / totalSeconds) * 100;
-  const cfg = MODES[mode];
-  const ModeIcon = cfg.icon;
+  const totalSecs  = (mode === 'foco' ? mins.foco : mins.pausa) * 60;
+  const progress   = (totalSecs - timeLeft) / totalSecs;
 
-  // Tick
+  // ── Tick ──────────────────────────────────────────────────
   useEffect(() => {
     if (running) {
       intervalRef.current = setInterval(() => {
@@ -41,7 +90,7 @@ export default function Pomodoro() {
           if (t <= 1) {
             clearInterval(intervalRef.current);
             setRunning(false);
-            handleComplete();
+            onComplete();
             return 0;
           }
           return t - 1;
@@ -51,192 +100,316 @@ export default function Pomodoro() {
       clearInterval(intervalRef.current);
     }
     return () => clearInterval(intervalRef.current);
-  }, [running, mode]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running]);
 
-  // Ao completar sessão
-  const handleComplete = useCallback(() => {
-    if (mode === 'focus') {
-      setSessions((s) => s + 1);
-      setTotalFocusMin((m) => m + customMins.focus);
-      // Notificação do browser
-      if (Notification.permission === 'granted') {
-        new Notification('🍅 Pomodoro concluído!', { body: 'Hora de descansar.' });
-      }
+  const onComplete = useCallback(() => {
+    playSound(sound);
+    if (Notification.permission === 'granted') {
+      new Notification(mode === 'foco' ? '✅ Foco concluído!' : '☕ Pausa terminada!',
+        { body: mode === 'foco' ? 'Hora de descansar.' : 'Hora de focar.' });
     }
-  }, [mode, customMins.focus]);
+    if (mode === 'foco') {
+      setSessions((s) => s + 1);
+      setTotalMin((m) => m + mins.foco);
+      setHistory((h) => [{ type: 'foco', mins: mins.foco, ts: new Date() }, ...h].slice(0, 20));
+      switchMode('pausa');
+    } else {
+      switchMode('foco');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, mins, sessions, sound]);
 
   const switchMode = (m) => {
     setMode(m);
-    setTimeLeft(customMins[m] * 60);
+    setTimeLeft((m === 'foco' ? mins.foco : mins.pausa) * 60);
     setRunning(false);
   };
 
   const reset = () => {
     setRunning(false);
-    setTimeLeft(customMins[mode] * 60);
+    setTimeLeft((mode === 'foco' ? mins.foco : mins.pausa) * 60);
   };
 
-  const requestNotifPermission = () => {
+  const toggleRun = () => {
     if (Notification.permission === 'default') Notification.requestPermission();
+    setRunning((r) => !r);
   };
 
-  // Atualiza tempo ao mudar configurações
-  const applySettings = () => {
-    setTimeLeft(customMins[mode] * 60);
-    setRunning(false);
-    setShowSettings(false);
+  // Atualiza tempo ao mudar minutos (se parado)
+  const updateMins = (key, val) => {
+    const next = { ...mins, [key]: val };
+    setMins(next);
+    if (!running) setTimeLeft((mode === 'foco' ? next.foco : next.pausa) * 60);
   };
 
-  // Circumference do anel SVG
-  const R = 110;
-  const circ = 2 * Math.PI * R;
-  const strokeDash = circ - (progress / 100) * circ;
+  // Anel SVG
+  const R       = 100;
+  const CIRC    = 2 * Math.PI * R;
+  const dashOff = CIRC * (1 - progress);
+
+  const label = mode === 'foco' ? 'Foco' : 'Pausa';
 
   return (
-    <motion.div className="p-8 space-y-8 max-w-2xl mx-auto" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:0.22}}>
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22 }}
+      style={{ padding: '32px 24px 60px', maxWidth: 520, margin: '0 auto' }}
+    >
 
-      {/* Seletor de modo */}
-      <div className="flex gap-2 bg-ink-muted/50 p-1.5 rounded-2xl w-fit mx-auto">
-        {Object.entries(MODES).map(([key, val]) => (
+      {/* ── Cabeçalho ─────────────────────────────────────── */}
+      <div style={{ textAlign: 'center', marginBottom: 36 }}>
+        <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+          Pomodoro
+        </h1>
+        <p style={{ fontSize: 15, color: 'var(--text-4)', marginTop: 6 }}>
+          Foco absoluto.
+        </p>
+      </div>
+
+      {/* ── Seletor de modo ───────────────────────────────── */}
+      <div style={{
+        display: 'flex', gap: 6, justifyContent: 'center',
+        background: 'var(--bg-muted)', padding: 4, borderRadius: 14,
+        marginBottom: 40,
+      }}>
+        {[
+          { id: 'foco',  label: 'Foco' },
+          { id: 'pausa', label: 'Pausa' },
+        ].map(({ id, label: lbl }) => (
           <button
-            key={key}
-            onClick={() => switchMode(key)}
-            className={`px-4 py-2 rounded-xl text-sm font-display font-semibold transition-all duration-200 ${
-              mode === key
-                ? 'text-ink shadow-lg'
-                : 'text-cream/40 hover:text-cream/70'
-            }`}
-            style={mode === key ? { backgroundColor: val.color } : {}}
+            key={id}
+            onClick={() => switchMode(id)}
+            style={{
+              flex: 1, padding: '8px 0', borderRadius: 10,
+              fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              border: 'none',
+              background: mode === id ? '#ffffff' : 'transparent',
+              color: mode === id ? 'var(--text)' : 'var(--text-4)',
+              boxShadow: mode === id ? 'var(--shadow-card)' : 'none',
+              transition: 'all 0.15s',
+            }}
           >
-            {val.label}
+            {lbl}
           </button>
         ))}
       </div>
 
-      {/* Timer Ring */}
-      <div className="flex flex-col items-center gap-6">
-        <div className="relative">
-          <svg width="280" height="280" className="-rotate-90">
-            {/* Track */}
-            <circle
-              cx="140" cy="140" r={R}
-              fill="none"
-              stroke="rgba(255,255,255,0.06)"
-              strokeWidth="8"
-            />
-            {/* Progress */}
-            <circle
-              cx="140" cy="140" r={R}
-              fill="none"
-              stroke={cfg.color}
-              strokeWidth="8"
+      {/* ── Timer ─────────────────────────────────────────── */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 40 }}>
+        {/* Anel */}
+        <div style={{ position: 'relative', width: 240, height: 240 }}>
+          <svg width="240" height="240" style={{ transform: 'rotate(-90deg)' }}>
+            <circle cx="120" cy="120" r={R} fill="none"
+              stroke="var(--border-md)" strokeWidth="6" />
+            <circle cx="120" cy="120" r={R} fill="none"
+              stroke="var(--text)" strokeWidth="6"
               strokeLinecap="round"
-              strokeDasharray={circ}
-              strokeDashoffset={strokeDash}
-              style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+              strokeDasharray={CIRC}
+              strokeDashoffset={dashOff}
+              style={{ transition: 'stroke-dashoffset 0.6s ease' }}
             />
           </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center rotate-0">
-            <ModeIcon size={20} style={{ color: cfg.color }} className="mb-2 opacity-70" />
-            <span
-              className="font-display font-bold text-6xl text-cream tabular-nums"
-              style={{ letterSpacing: '-2px' }}
-            >
-              {fmt(timeLeft)}
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={`${mode}-${running}`}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.15 }}
+                style={{
+                  fontSize: 52, fontWeight: 700,
+                  color: 'var(--text)', letterSpacing: '-0.04em',
+                  fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+                }}
+              >
+                {fmt(timeLeft)}
+              </motion.span>
+            </AnimatePresence>
+            <span style={{ fontSize: 13, color: 'var(--text-4)', marginTop: 6, fontWeight: 500 }}>
+              {label}
             </span>
-            <span className="text-xs font-mono text-cream/30 mt-2">{cfg.label}</span>
           </div>
         </div>
 
-        {/* Tarefa atual */}
-        <input
-          type="text"
-          placeholder="Em que você está trabalhando?"
-          value={task}
-          onChange={(e) => setTask(e.target.value)}
-          className="input-base text-center text-sm max-w-xs"
-        />
-
-        {/* Controles */}
-        <div className="flex items-center gap-4">
-          <button
-            onClick={reset}
-            className="p-3 rounded-2xl bg-white/5 hover:bg-white/10 text-cream/40 hover:text-cream transition-colors"
-          >
-            <RotateCcw size={18} />
-          </button>
-          <button
-            onClick={() => { setRunning((r) => !r); requestNotifPermission(); }}
-            className="flex items-center gap-3 px-8 py-4 rounded-2xl font-display font-bold text-ink text-lg transition-all active:scale-95 shadow-lg"
-            style={{ backgroundColor: cfg.color }}
-          >
-            {running ? <Pause size={22} /> : <Play size={22} fill="currentColor" />}
-            {running ? 'Pausar' : 'Iniciar'}
-          </button>
-          <button
-            onClick={() => setShowSettings((s) => !s)}
-            className="p-3 rounded-2xl bg-white/5 hover:bg-white/10 text-cream/40 hover:text-cream transition-colors"
-          >
-            <Settings size={18} />
-          </button>
+        {/* Sessões */}
+        <div style={{ display: 'flex', gap: 6, marginTop: 16 }}>
+          {Array.from({ length: mins.rounds }).map((_, i) => (
+            <div key={i} style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: i < sessions % mins.rounds
+                ? 'var(--text)' : 'var(--border-md)',
+              transition: 'background 0.3s',
+            }} />
+          ))}
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card className="text-center">
-          <p className="label mb-1">🍅 POMODOROS</p>
-          <p className="font-display font-bold text-3xl " style={{color:'var(--green)'}}>{sessions}</p>
-          <p className="text-xs text-cream/30 mt-1">hoje</p>
-        </Card>
-        <Card className="text-center">
-          <p className="label mb-1">⏱ FOCO TOTAL</p>
-          <p className="font-display font-bold text-3xl text-accent-blue">{totalFocusMin}</p>
-          <p className="text-xs text-cream/30 mt-1">minutos</p>
-        </Card>
-        <Card className="text-center">
-          <p className="label mb-1">🎯 PRÓXIMA</p>
-          <p className="font-display font-bold text-sm text-cream/60 mt-2">
-            {sessions > 0 && sessions % 4 === 0 ? 'Pausa longa!' : `Pomodoro ${sessions + 1}`}
-          </p>
-        </Card>
+      {/* ── Controles ─────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', alignItems: 'center',
+        justifyContent: 'center', gap: 20, marginBottom: 48,
+      }}>
+        {/* Reset */}
+        <button
+          onClick={reset}
+          style={{
+            width: 44, height: 44, borderRadius: '50%',
+            background: 'var(--bg-muted)', border: '1px solid var(--border-md)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', color: 'var(--text-4)',
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text)'}
+          onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-4)'}
+        >
+          <RotateCcw size={16} />
+        </button>
+
+        {/* Play / Pause — botão grande, preto */}
+        <motion.button
+          onClick={toggleRun}
+          whileTap={{ scale: 0.94 }}
+          style={{
+            width: 72, height: 72, borderRadius: '50%',
+            background: 'var(--text)', border: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', boxShadow: 'var(--shadow-md)',
+          }}
+        >
+          {running
+            ? <Pause size={26} style={{ color: '#ffffff' }} fill="#ffffff" />
+            : <Play  size={26} style={{ color: '#ffffff', marginLeft: 3 }} fill="#ffffff" />
+          }
+        </motion.button>
+
+        {/* Placeholder de simetria */}
+        <div style={{ width: 44, height: 44 }} />
       </div>
 
-      {/* Configurações */}
-      {showSettings && (
-        <Card className="animate-in">
-          <h3 className="font-display font-semibold text-cream mb-4">⚙️ Configurações</h3>
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { key: 'focus', label: 'Foco (min)' },
-              { key: 'shortBreak', label: 'Pausa Curta' },
-              { key: 'longBreak', label: 'Pausa Longa' },
-            ].map(({ key, label }) => (
-              <div key={key} className="flex flex-col gap-1.5">
-                <span className="label">{label}</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="90"
-                  value={customMins[key]}
-                  onChange={(e) => setCustomMins({ ...customMins, [key]: Number(e.target.value) })}
-                  className="input-base text-center"
-                />
+      {/* ── Configurações ─────────────────────────────────── */}
+      <div style={{
+        background: '#ffffff', border: '1px solid var(--border-md)',
+        borderRadius: 18, padding: '24px 24px 20px', marginBottom: 24,
+      }}>
+        <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase',
+          letterSpacing: '0.07em', color: 'var(--text-4)', marginBottom: 20 }}>
+          Configurações
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {[
+            { key: 'foco',   label: 'Foco',   min: 1, max: 90  },
+            { key: 'pausa',  label: 'Pausa',  min: 1, max: 30  },
+            { key: 'rounds', label: 'Rounds', min: 1, max: 12  },
+          ].map(({ key, label: lbl, min, max }) => (
+            <div key={key}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)' }}>{lbl}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
+                  {mins[key]}{key !== 'rounds' ? ' min' : '×'}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={min}
+                max={max}
+                value={mins[key]}
+                onChange={(e) => updateMins(key, Number(e.target.value))}
+                style={{
+                  width: '100%', appearance: 'none', height: 4,
+                  borderRadius: 99, background: `linear-gradient(to right, var(--text) ${((mins[key] - min) / (max - min)) * 100}%, var(--border-md) 0%)`,
+                  outline: 'none', cursor: 'pointer',
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Som ───────────────────────────────────────────── */}
+      <div style={{
+        background: '#ffffff', border: '1px solid var(--border-md)',
+        borderRadius: 18, padding: '20px 24px', marginBottom: 24,
+      }}>
+        <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase',
+          letterSpacing: '0.07em', color: 'var(--text-4)', marginBottom: 14 }}>
+          Som de alerta
+        </p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {[
+            { id: 'sino',    label: 'Sino'    },
+            { id: 'digital', label: 'Digital' },
+            { id: 'calmo',   label: 'Calmo'   },
+          ].map(({ id, label: lbl }) => (
+            <button
+              key={id}
+              onClick={() => { setSound(id); playSound(id); }}
+              style={{
+                flex: 1, padding: '9px 0', borderRadius: 10,
+                fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                border: `1px solid ${sound === id ? 'var(--text)' : 'var(--border-md)'}`,
+                background: sound === id ? 'var(--text)' : '#ffffff',
+                color: sound === id ? '#ffffff' : 'var(--text-3)',
+                transition: 'all 0.15s',
+              }}
+            >
+              {lbl}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Histórico ─────────────────────────────────────── */}
+      <div style={{
+        background: '#ffffff', border: '1px solid var(--border-md)',
+        borderRadius: 18, padding: '20px 24px',
+      }}>
+        <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase',
+          letterSpacing: '0.07em', color: 'var(--text-4)', marginBottom: 14 }}>
+          Histórico de hoje
+        </p>
+
+        {history.length === 0 ? (
+          <p style={{ fontSize: 14, color: 'var(--text-4)', textAlign: 'center', padding: '8px 0' }}>
+            Nenhuma sessão registrada ainda.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {history.map((h, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '8px 0',
+                borderBottom: i < history.length - 1 ? '1px solid var(--border)' : 'none',
+              }}>
+                <span style={{ fontSize: 14, color: 'var(--text-2)', fontWeight: 500 }}>
+                  Sessão de foco — {h.mins} min
+                </span>
+                <span style={{ fontSize: 12, color: 'var(--text-4)', fontFamily: 'monospace' }}>
+                  {h.ts.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                </span>
               </div>
             ))}
           </div>
-          <div className="flex gap-3 mt-4">
-            <Button className="flex-1" onClick={applySettings}>Aplicar</Button>
-            <Button variant="ghost" onClick={() => setShowSettings(false)}>Cancelar</Button>
-          </div>
-        </Card>
-      )}
+        )}
 
-      {/* Dica */}
-      <div className="text-center">
-        <p className="text-xs font-mono text-cream/20">
-          A cada 4 pomodoros, faça uma pausa longa de {customMins.longBreak} minutos
-        </p>
+        {sessions > 0 && (
+          <div style={{
+            marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-md)',
+            display: 'flex', justifyContent: 'space-between',
+          }}>
+            <span style={{ fontSize: 13, color: 'var(--text-3)' }}>Total de foco</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+              {totalMin} min · {sessions} {sessions === 1 ? 'sessão' : 'sessões'}
+            </span>
+          </div>
+        )}
       </div>
     </motion.div>
   );

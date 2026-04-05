@@ -176,7 +176,8 @@ export default function CheckIn() {
             promessas:     Boolean(existing.promessas),
             diario:        existing.diario || '',
           });
-          setDone(true);
+          // Só considera "feito" se foi finalizado (completed = true)
+          if (existing.completed) setDone(true);
         }
       })
       .catch(() => {})
@@ -188,7 +189,8 @@ export default function CheckIn() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.post('/checkins', { date: today, ...form });
+      // completed: true — só marcado ao clicar em "Finalizar Dia"
+      await api.post('/checkins', { date: today, ...form, completed: true });
       show('Check-in salvo com sucesso! ✨', 'success');
       setDone(true);
       setEditing(false);

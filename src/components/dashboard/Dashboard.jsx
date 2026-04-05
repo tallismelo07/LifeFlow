@@ -1,5 +1,5 @@
-// src/components/dashboard/Dashboard.jsx — v2
-// Dashboard inteligente: financeiro por mês, status de saúde, alertas
+// src/components/dashboard/Dashboard.jsx — v3
+// Dashboard geral + versão financeira exclusiva para Tallis
 import { motion } from 'framer-motion';
 import { useApp }  from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -121,6 +121,275 @@ function FinanceHealth({ income, expense, balance }) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  TALLIS DASHBOARD — Foco financeiro
+// ═══════════════════════════════════════════════════════════════
+
+const MONTHS_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function TallisDashboard() {
+  const { transactions } = useApp();
+  const { setActiveTab }  = useNav();
+
+  const now              = new Date();
+  const currentMonthKey  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const monthName        = `${MONTHS_PT[now.getMonth()]} de ${now.getFullYear()}`;
+
+  // Mês atual
+  const monthTxs   = (transactions || []).filter((t) => (t.date || t.createdAt || '').slice(0, 7) === currentMonthKey);
+  const income     = monthTxs.filter((t) => t.type === 'income').reduce((s, t) => s + (t.amount || 0), 0);
+  const expense    = monthTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + (t.amount || 0), 0);
+  const balance    = income - expense;
+
+  // Percentual gasto da renda
+  const spentPct   = income > 0 ? Math.round((expense / income) * 100) : null;
+  const isPositive = balance >= 0;
+
+  // Últimos 3 meses (histórico)
+  const last3 = Array.from({ length: 3 }, (_, i) => {
+    const d    = new Date(now.getFullYear(), now.getMonth() - (2 - i), 1);
+    const key  = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const txs  = (transactions || []).filter((t) => (t.date || t.createdAt || '').slice(0, 7) === key);
+    return {
+      label:   MONTHS_PT[d.getMonth()],
+      income:  txs.filter((t) => t.type === 'income').reduce((s, t) => s + (t.amount || 0), 0),
+      expense: txs.filter((t) => t.type === 'expense').reduce((s, t) => s + (t.amount || 0), 0),
+    };
+  });
+
+  // Top 3 categorias de gasto do mês
+  const catMap = {};
+  monthTxs.filter((t) => t.type === 'expense').forEach((t) => {
+    catMap[t.category || 'outro'] = (catMap[t.category || 'outro'] || 0) + t.amount;
+  });
+  const topCats = Object.entries(catMap).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+  const CAT_LABELS = {
+    alimentacao: 'Alimentação', assinatura: 'Assinatura', curso: 'Curso',
+    salario: 'Salário', freelancer: 'Freelancer', saude: 'Saúde',
+    transporte: 'Transporte', moradia: 'Moradia', lazer: 'Lazer', outro: 'Outro',
+  };
+
+  const hour     = now.getHours();
+  const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+
+  const maxBar = Math.max(...last3.flatMap((m) => [m.income, m.expense]), 1);
+
+  return (
+    <motion.div
+      style={{ padding: '24px 20px 60px', maxWidth: 720, margin: '0 auto' }}
+      variants={container} initial="initial" animate="animate"
+    >
+      {/* ── Saudação ──────────────────────────────────────── */}
+      <motion.div variants={fadeUp} style={{ marginBottom: 28 }}>
+        <p style={{ fontSize: 13, color: 'var(--text-4)', marginBottom: 4 }}>
+          {now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+        </p>
+        <h1 style={{ fontSize: 'clamp(22px,4vw,28px)', fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em', lineHeight: 1.2 }}>
+          {greeting}, Tallis
+        </h1>
+        <p style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 4 }}>Resumo financeiro de {monthName}</p>
+      </motion.div>
+
+      {/* ── Saldo hero ────────────────────────────────────── */}
+      <motion.div variants={fadeUp} style={{
+        background: '#ffffff', border: `2px solid ${isPositive ? 'var(--green-border)' : 'var(--red-border)'}`,
+        borderRadius: 20, padding: '28px 24px', marginBottom: 16, textAlign: 'center',
+      }}>
+        <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase',
+          letterSpacing: '0.07em', color: 'var(--text-4)', marginBottom: 8 }}>
+          Saldo em {monthName}
+        </p>
+        <motion.p
+          style={{ fontSize: 'clamp(32px,6vw,42px)', fontWeight: 800,
+            color: isPositive ? 'var(--green)' : 'var(--red)',
+            letterSpacing: '-0.03em', lineHeight: 1 }}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.2, type: 'spring' }}
+        >
+          {fmt(balance)}
+        </motion.p>
+
+        {/* Status badge */}
+        <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '6px 14px', borderRadius: 99,
+          background: isPositive ? 'var(--green-bg)' : 'var(--red-bg)',
+          border: `1px solid ${isPositive ? 'var(--green-border)' : 'var(--red-border)'}` }}>
+          {isPositive
+            ? <ThumbsUp size={13} style={{ color: 'var(--green)' }} />
+            : <AlertTriangle size={13} style={{ color: 'var(--red)' }} />}
+          <span style={{ fontSize: 13, fontWeight: 600, color: isPositive ? 'var(--green)' : 'var(--red)' }}>
+            {isPositive ? 'Saldo positivo' : 'Saldo negativo'}
+          </span>
+        </div>
+      </motion.div>
+
+      {/* ── Entradas / Saídas ─────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+        {[
+          { label: 'Entradas', value: income,  Icon: TrendingUp,   color: 'var(--green)', bg: 'var(--green-bg)', border: 'var(--green-border)' },
+          { label: 'Saídas',   value: expense, Icon: TrendingDown, color: 'var(--red)',   bg: 'var(--red-bg)',   border: 'var(--red-border)'   },
+        ].map(({ label, value, Icon, color, bg, border }) => (
+          <motion.div key={label} variants={fadeUp} style={{
+            background: bg, border: `1px solid ${border}`,
+            borderRadius: 16, padding: '18px 16px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <Icon size={15} style={{ color }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)' }}>{label}</span>
+            </div>
+            <p style={{ fontSize: 'clamp(18px,3vw,22px)', fontWeight: 700, color, letterSpacing: '-0.01em' }}>
+              {fmt(value)}
+            </p>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* ── Você gastou X% da renda ───────────────────────── */}
+      {income > 0 && (
+        <motion.div variants={fadeUp} style={{
+          background: '#ffffff', border: '1px solid var(--border-md)',
+          borderRadius: 16, padding: '18px 20px', marginBottom: 16,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)' }}>
+              Você gastou{' '}
+              <strong style={{ color: spentPct > 100 ? 'var(--red)' : spentPct > 80 ? 'var(--amber)' : 'var(--green)' }}>
+                {spentPct}%
+              </strong>
+              {' '}da sua renda
+            </p>
+            <span style={{ fontSize: 12, color: 'var(--text-4)' }}>{monthName}</span>
+          </div>
+          <div style={{ height: 6, background: 'var(--bg-muted)', borderRadius: 99, overflow: 'hidden' }}>
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${Math.min(spentPct, 100)}%` }}
+              transition={{ duration: 1, ease: 'easeOut', delay: 0.3 }}
+              style={{
+                height: '100%', borderRadius: 99,
+                background: spentPct > 100 ? 'var(--red)' : spentPct > 80 ? 'var(--amber)' : 'var(--green)',
+              }}
+            />
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--text-4)', marginTop: 8 }}>
+            {spentPct <= 70
+              ? '✓ Ótimo controle de gastos!'
+              : spentPct <= 90
+              ? 'Atenção: você usou a maior parte da renda.'
+              : '⚠ Você gastou quase toda (ou mais) da renda.'}
+          </p>
+        </motion.div>
+      )}
+
+      {/* ── Linha 2: Top categorias + Histórico ────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginBottom: 16 }}
+        className="lg:grid-cols-2">
+
+        {/* Top categorias */}
+        <motion.div variants={fadeUp} style={{
+          background: '#ffffff', border: '1px solid var(--border-md)',
+          borderRadius: 16, padding: '20px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Principais gastos</h3>
+            <button onClick={() => setActiveTab('finance')}
+              style={{ fontSize: 12, color: 'var(--text-3)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}>
+              Ver tudo <ArrowRight size={11} />
+            </button>
+          </div>
+          {topCats.length === 0 ? (
+            <p style={{ fontSize: 13, color: 'var(--text-4)', textAlign: 'center', padding: '12px 0' }}>
+              Sem gastos registrados
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {topCats.map(([cat, total], i) => {
+                const pct = expense > 0 ? Math.round((total / expense) * 100) : 0;
+                return (
+                  <div key={cat}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                      <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 500 }}>
+                        {CAT_LABELS[cat] || cat}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+                        {fmt(total)} <span style={{ fontSize: 11, color: 'var(--text-4)', fontWeight: 400 }}>({pct}%)</span>
+                      </span>
+                    </div>
+                    <div style={{ height: 5, background: 'var(--bg-muted)', borderRadius: 99, overflow: 'hidden' }}>
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
+                        transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 * i }}
+                        style={{ height: '100%', background: 'var(--text)', opacity: 0.7 - i * 0.15, borderRadius: 99 }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </motion.div>
+
+        {/* Histórico 3 meses */}
+        <motion.div variants={fadeUp} style={{
+          background: '#ffffff', border: '1px solid var(--border-md)',
+          borderRadius: 16, padding: '20px',
+        }}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 16 }}>Últimos 3 meses</h3>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', height: 90, marginBottom: 12 }}>
+            {last3.map(({ label: lbl, income: inc, expense: exp }) => (
+              <div key={lbl} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end', height: 70 }}>
+                  <motion.div
+                    initial={{ height: 0 }}
+                    animate={{ height: `${(inc / maxBar) * 70}px` }}
+                    transition={{ duration: 0.7, ease: 'easeOut' }}
+                    style={{ width: 14, background: 'var(--green)', borderRadius: '4px 4px 2px 2px', opacity: 0.8, minHeight: inc > 0 ? 3 : 0 }}
+                  />
+                  <motion.div
+                    initial={{ height: 0 }}
+                    animate={{ height: `${(exp / maxBar) * 70}px` }}
+                    transition={{ duration: 0.7, ease: 'easeOut', delay: 0.05 }}
+                    style={{ width: 14, background: 'var(--red)', borderRadius: '4px 4px 2px 2px', opacity: 0.8, minHeight: exp > 0 ? 3 : 0 }}
+                  />
+                </div>
+                <span style={{ fontSize: 11, color: 'var(--text-4)' }}>{lbl}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 14 }}>
+            {[{ label: 'Entradas', color: 'var(--green)' }, { label: 'Saídas', color: 'var(--red)' }].map(({ label: lbl, color }) => (
+              <span key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-3)' }}>
+                <span style={{ width: 8, height: 8, background: color, borderRadius: 2, display: 'inline-block' }} />
+                {lbl}
+              </span>
+            ))}
+          </div>
+        </motion.div>
+      </div>
+
+      {/* ── Link para financeiro completo ──────────────────── */}
+      <motion.button
+        variants={fadeUp}
+        onClick={() => setActiveTab('finance')}
+        whileTap={{ scale: 0.98 }}
+        style={{
+          width: '100%', padding: '14px', borderRadius: 14,
+          background: 'var(--text)', color: '#ffffff', border: 'none',
+          fontSize: 14, fontWeight: 600, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}
+      >
+        <Wallet size={16} />
+        Abrir controle financeiro completo
+        <ArrowRight size={14} />
+      </motion.button>
+    </motion.div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
 
@@ -128,6 +397,9 @@ export default function Dashboard() {
   const { tasks, habits, transactions, goals, agenda } = useApp();
   const { currentUser } = useAuth();
   const { setActiveTab } = useNav();
+
+  // Tallis tem dashboard exclusivamente financeiro
+  if (currentUser?.username === 'tallis') return <TallisDashboard />;
 
   const todayStr = new Date().toISOString().split('T')[0];
   const now      = new Date();

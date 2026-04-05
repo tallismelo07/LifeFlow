@@ -165,8 +165,9 @@ function initDB() {
   `);
 
   // Migrações
-  const userCols     = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
-  const userDataCols = db.prepare('PRAGMA table_info(user_data)').all().map((c) => c.name);
+  const userCols      = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+  const userDataCols  = db.prepare('PRAGMA table_info(user_data)').all().map((c) => c.name);
+  const checkinCols   = db.prepare('PRAGMA table_info(daily_checkins)').all().map((c) => c.name);
 
   if (!userCols.includes('email'))
     db.exec("ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''");
@@ -174,6 +175,8 @@ function initDB() {
     db.exec("ALTER TABLE user_data ADD COLUMN cards TEXT NOT NULL DEFAULT '[]'");
   if (!userDataCols.includes('notes'))
     db.exec("ALTER TABLE user_data ADD COLUMN notes TEXT NOT NULL DEFAULT '[]'");
+  if (!checkinCols.includes('completed'))
+    db.exec("ALTER TABLE daily_checkins ADD COLUMN completed INTEGER NOT NULL DEFAULT 0");
 
   // Seed
   const insertUser = db.prepare(`
@@ -886,6 +889,7 @@ app.get('/api/checkins', auth, (req, res) => {
     dormiu_bem:    Boolean(c.dormiu_bem),
     promessas:     Boolean(c.promessas),
     diario:        c.diario || '',
+    completed:     Boolean(c.completed),
     created_at:    c.created_at,
   }));
 
@@ -893,22 +897,24 @@ app.get('/api/checkins', auth, (req, res) => {
 });
 
 // POST /api/checkins — cria ou atualiza check-in do dia (upsert)
+// completed=true → apenas quando o usuário clica em "Finalizar Dia"
 app.post('/api/checkins', auth, (req, res) => {
-  const { date, produtividade, dia_bom, dormiu_bem, promessas, diario } = req.body || {};
+  const { date, produtividade, dia_bom, dormiu_bem, promessas, diario, completed } = req.body || {};
 
   if (!date || typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date))
     return res.status(400).json({ error: 'data inválida (formato YYYY-MM-DD).' });
 
   db.prepare(`
     INSERT INTO daily_checkins
-      (user_id, date, produtividade, dia_bom, dormiu_bem, promessas, diario, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      (user_id, date, produtividade, dia_bom, dormiu_bem, promessas, diario, completed, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, date) DO UPDATE SET
       produtividade = excluded.produtividade,
       dia_bom       = excluded.dia_bom,
       dormiu_bem    = excluded.dormiu_bem,
       promessas     = excluded.promessas,
-      diario        = excluded.diario
+      diario        = excluded.diario,
+      completed     = CASE WHEN excluded.completed = 1 THEN 1 ELSE daily_checkins.completed END
   `).run(
     req.user.id,
     date,
@@ -917,10 +923,11 @@ app.post('/api/checkins', auth, (req, res) => {
     dormiu_bem    ? 1 : 0,
     promessas     ? 1 : 0,
     typeof diario === 'string' ? diario.slice(0, 5000) : '',
+    completed     ? 1 : 0,
     nowISO()
   );
 
-  logDB('info', `Check-in ${date}: user=${req.user.username}`, 'checkin', req.user.id);
+  logDB('info', `Check-in ${date} completed=${!!completed}: user=${req.user.username}`, 'checkin', req.user.id);
   return res.json({ ok: true });
 });
 
