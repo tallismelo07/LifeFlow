@@ -34,11 +34,12 @@ const BANKS = [
   { value: 'nubank',      label: 'Nubank',        color: '#8A05BE' },
   { value: 'itau',        label: 'Itaú',          color: '#FF6200' },
   { value: 'inter',       label: 'Inter',         color: '#FF7A00' },
+  { value: 'mercadopago', label: 'Mercado Pago',  color: '#00BCFF' },
+  { value: 'dinheiro',    label: 'Dinheiro',      color: '#22c55e' },
   { value: 'bradesco',    label: 'Bradesco',      color: '#CC092F' },
   { value: 'bb',          label: 'Banco do Brasil', color: '#FFDD00', textColor: '#1a1a1a' },
   { value: 'santander',   label: 'Santander',     color: '#EC0000' },
   { value: 'caixa',       label: 'Caixa',         color: '#005BAC' },
-  { value: 'mercadopago', label: 'Mercado Pago',  color: '#00BCFF' },
   { value: 'picpay',      label: 'PicPay',        color: '#11C76F' },
   { value: 'c6',          label: 'C6 Bank',       color: '#222222' },
   { value: 'neon',        label: 'Neon',          color: '#00D1AC' },
@@ -98,6 +99,7 @@ function parseFinanceInput(text) {
   if      (lower.includes('nubank')                             ) bank = 'nubank';
   else if (lower.includes('itaú')    || lower.includes('itau') ) bank = 'itau';
   else if (lower.includes('inter')                              ) bank = 'inter';
+  else if (lower.includes('dinheiro') || lower.includes('espécie') || lower.includes('especie') || lower.includes(' cash')) bank = 'dinheiro';
   else if (lower.includes('bradesco')                           ) bank = 'bradesco';
   else if (lower.includes('banco do brasil') || lower.includes(' bb ') || lower.includes('bb banco')) bank = 'bb';
   else if (lower.includes('santander')                          ) bank = 'santander';

@@ -6,8 +6,10 @@ import { useAuth } from '../../context/AuthContext';
 import {
   Home, LayoutDashboard, CheckSquare, Flame, Wallet,
   Leaf, X, Target, Shield, Lightbulb, Calendar, CalendarCheck,
+  Timer,
 } from 'lucide-react';
 
+// Itens completos (outros usuários)
 const getNavItems = (isAdmin) => [
   { id: 'home',      label: 'Início',     icon: Home,            shortcut: '1' },
   { id: 'dashboard', label: 'Dashboard',  icon: LayoutDashboard, shortcut: '2' },
@@ -19,6 +21,16 @@ const getNavItems = (isAdmin) => [
   { id: 'checkin',   label: 'Check-in',   icon: CalendarCheck,   shortcut: 'C' },
   ...(!isAdmin ? [{ id: 'feedback', label: 'Sugestões', icon: Lightbulb, shortcut: 'F' }] : []),
   ...(isAdmin  ? [{ id: 'admin',    label: 'Admin',     icon: Shield,    shortcut: 'A', isAdmin: true }] : []),
+];
+
+// Itens reduzidos para Tallis (admin)
+const TALLIS_NAV_ITEMS = [
+  { id: 'home',      label: 'Início',     icon: Home,            shortcut: '1' },
+  { id: 'dashboard', label: 'Dashboard',  icon: LayoutDashboard, shortcut: '2' },
+  { id: 'finance',   label: 'Financeiro', icon: Wallet,          shortcut: '3' },
+  { id: 'checkin',   label: 'Check-in',   icon: CalendarCheck,   shortcut: 'C' },
+  { id: 'pomodoro',  label: 'Pomodoro',   icon: Timer,           shortcut: 'P' },
+  { id: 'admin',     label: 'Admin',      icon: Shield,          shortcut: 'A', isAdmin: true },
 ];
 
 function NavItem({ item, isActive, onClick, badge }) {
@@ -62,8 +74,10 @@ export default function Sidebar() {
   const { tasks, habits } = useApp();
   const { currentUser } = useAuth();
 
-  const isAdmin   = currentUser?.role === 'admin';
-  const NAV_ITEMS = getNavItems(isAdmin);
+  const isAdmin     = currentUser?.role === 'admin';
+  const isTallis    = currentUser?.username === 'tallis';
+  const NAV_ITEMS   = isTallis ? TALLIS_NAV_ITEMS : getNavItems(isAdmin);
+
   const todayStr  = new Date().toISOString().split('T')[0];
   const pendingTasks = tasks.filter((t) => !t.completed).length;
   const habitsLeft   = habits.filter((h) => !h.completedDates.includes(todayStr)).length;
@@ -119,7 +133,7 @@ export default function Sidebar() {
                 {currentUser.name}
               </p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>
-                {isAdmin ? 'Administrador' : 'Usuário'}
+                {isTallis ? 'Admin · Modo foco' : isAdmin ? 'Administrador' : 'Usuário'}
               </p>
             </div>
           </div>

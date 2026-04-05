@@ -24,6 +24,7 @@ import Finance    from './components/finance/Finance';
 import Goals      from './components/goals/Goals';
 import AdminPanel from './components/admin/AdminPanel';
 import Feedback   from './components/feedback/Feedback';
+import Pomodoro   from './components/pomodoro/Pomodoro';
 import CommandPalette from './components/ui/CommandPalette';
 
 // ─────────────────────────────────────────────────────────────
@@ -39,6 +40,7 @@ const VIEWS = {
   goals:     Goals,
   admin:     AdminPanel,
   feedback:  Feedback,
+  pomodoro:  Pomodoro,
 };
 
 const SHORTCUTS = {

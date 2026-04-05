@@ -7,11 +7,11 @@ import { useAuth } from '../../context/AuthContext';
 import {
   Home, LayoutDashboard, Wallet, Flame,
   CheckSquare, Target, Shield, Lightbulb,
-  MoreHorizontal, Calendar, CalendarCheck,
+  MoreHorizontal, Calendar, CalendarCheck, Timer,
 } from 'lucide-react';
 
-// 5 itens fixos na tab bar
-const NAV_ITEMS = [
+// Tabs fixas para usuários comuns
+const NAV_ITEMS_DEFAULT = [
   { id: 'home',      label: 'Início',   icon: Home            },
   { id: 'dashboard', label: 'Atlas',    icon: LayoutDashboard },
   { id: 'tasks',     label: 'Trilha',   icon: CheckSquare     },
@@ -19,11 +19,25 @@ const NAV_ITEMS = [
   { id: 'habits',    label: 'Rotina',   icon: Flame           },
 ];
 
-// Itens do menu "Mais"
-const MORE_BASE = [
+// Tabs fixas para Tallis
+const NAV_ITEMS_TALLIS = [
+  { id: 'home',      label: 'Início',   icon: Home            },
+  { id: 'dashboard', label: 'Dashboard',icon: LayoutDashboard },
+  { id: 'finance',   label: 'Finanças', icon: Wallet          },
+  { id: 'checkin',   label: 'Check-in', icon: CalendarCheck   },
+  { id: 'pomodoro',  label: 'Foco',     icon: Timer           },
+];
+
+// Itens do menu "Mais" para usuários comuns
+const MORE_BASE_DEFAULT = [
   { id: 'agenda',  label: 'Agenda',     icon: Calendar      },
   { id: 'goals',   label: 'Metas',      icon: Target        },
   { id: 'checkin', label: 'Check-in',   icon: CalendarCheck },
+];
+
+// Itens do menu "Mais" para Tallis
+const MORE_BASE_TALLIS = [
+  { id: 'admin', label: 'Admin', icon: Shield },
 ];
 
 // ── Botão de tab ─────────────────────────────────────────────
@@ -79,16 +93,21 @@ function TabBtn({ item, active, badge, onClick }) {
 export default function BottomNav() {
   const { activeTab, setActiveTab } = useNav();
   const { currentUser } = useAuth();
-  const isAdmin  = currentUser?.role === 'admin';
+  const isAdmin   = currentUser?.role === 'admin';
+  const isTallis  = currentUser?.username === 'tallis';
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const allMore = [
-    ...MORE_BASE,
-    ...(isAdmin
-      ? [{ id: 'admin',    label: 'Admin',     icon: Shield    }]
-      : [{ id: 'feedback', label: 'Sugestões', icon: Lightbulb }]
-    ),
-  ];
+  const NAV_ITEMS = isTallis ? NAV_ITEMS_TALLIS : NAV_ITEMS_DEFAULT;
+
+  const allMore = isTallis
+    ? MORE_BASE_TALLIS
+    : [
+        ...MORE_BASE_DEFAULT,
+        ...(isAdmin
+          ? [{ id: 'admin',    label: 'Admin',     icon: Shield    }]
+          : [{ id: 'feedback', label: 'Sugestões', icon: Lightbulb }]
+        ),
+      ];
 
   const isMoreActive = allMore.some((i) => i.id === activeTab);
 
@@ -102,7 +121,7 @@ export default function BottomNav() {
         style={{
           background:    'var(--sidebar-bg)',
           borderTop:     '1px solid var(--border-md)',
-          boxShadow:     '0 -4px 24px rgba(0,0,0,0.40)',
+          boxShadow:     '0 -4px 24px rgba(0,0,0,0.12)',
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
           height:        58,
         }}
@@ -155,7 +174,7 @@ export default function BottomNav() {
             <motion.div
               key="backdrop"
               className="lg:hidden fixed inset-0 z-[40]"
-              style={{ background: 'rgba(0,0,0,0.60)' }}
+              style={{ background: 'rgba(0,0,0,0.45)' }}
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={{ duration: 0.18 }}
               onClick={() => setMoreOpen(false)}
@@ -167,7 +186,7 @@ export default function BottomNav() {
                 bottom:        0,
                 background:    'var(--bg-soft)',
                 borderTop:     '1px solid var(--border-md)',
-                boxShadow:     '0 -12px 44px rgba(0,0,0,0.55)',
+                boxShadow:     '0 -8px 32px rgba(0,0,0,0.12)',
                 paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 66px)',
               }}
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}

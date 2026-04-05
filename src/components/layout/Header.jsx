@@ -3,10 +3,9 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNav }   from '../../context/NavContext';
 import { useAuth }  from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
 import { changePasswordRequest } from '../../services/authService';
 import {
-  Menu, Search, LogOut, Shield, Sun, Moon,
+  Menu, Search, LogOut, Shield,
   KeyRound, Eye, EyeOff, X, CheckCircle2, Loader2, User, Save,
   CloudOff,
 } from 'lucide-react';
@@ -23,6 +22,7 @@ const TITLES = {
   goals:     { title: 'Metas',       sub: 'Acompanhe seus objetivos'        },
   admin:     { title: 'Painel Admin',sub: 'Gestão de usuários'              },
   feedback:  { title: 'Sugestões',   sub: 'Envie ideias e feedback'         },
+  pomodoro:  { title: 'Pomodoro',    sub: 'Foco e produtividade'            },
 };
 
 // ── Save status pill — escuta eventos customizados do AppContext ──────────────
@@ -346,7 +346,6 @@ function AccountModal({ onClose }) {
 export default function Header({ onOpenCmd }) {
   const { activeTab, setSidebarOpen } = useNav();
   const { currentUser, logout } = useAuth();
-  const { isDark, toggle: toggleTheme } = useTheme();
   const { title, sub } = TITLES[activeTab] || TITLES.dashboard;
   const isAdmin = currentUser?.role === 'admin';
 
@@ -412,28 +411,6 @@ export default function Header({ onOpenCmd }) {
               {isAdmin && <Shield size={11} style={{ color: 'var(--amber)' }} />}
             </motion.button>
           )}
-
-          {/* Theme toggle */}
-          <motion.button
-            onClick={toggleTheme}
-            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.92 }}
-            className="p-2 rounded-xl transition-colors"
-            style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)' }}
-            title={isDark ? 'Modo claro' : 'Modo escuro'}
-          >
-            <AnimatePresence mode="wait">
-              <motion.span
-                key={isDark ? 'sun' : 'moon'}
-                initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
-                animate={{ opacity: 1, rotate: 0,  scale: 1   }}
-                exit={{   opacity: 0, rotate:  90, scale: 0.5 }}
-                transition={{ duration: 0.18 }}
-                className="block"
-              >
-                {isDark ? <Sun size={16} /> : <Moon size={16} />}
-              </motion.span>
-            </AnimatePresence>
-          </motion.button>
 
           {/* Search */}
           <motion.button

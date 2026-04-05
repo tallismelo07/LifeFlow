@@ -1,32 +1,20 @@
 // src/context/ThemeContext.jsx
-// Dark / Light mode — persiste no localStorage, aplica classe no <html>
+// Light mode fixo — sem toggle dark/light
 
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useEffect } from 'react';
 
 const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('lf_theme') || 'dark';
-  });
-
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === 'light') {
-      root.classList.add('light');
-      root.classList.remove('dark');
-    } else {
-      root.classList.add('dark');
-      root.classList.remove('light');
-    }
-    localStorage.setItem('lf_theme', theme);
-  }, [theme]);
-
-  const toggle = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
-  const isDark  = theme === 'dark';
+    root.classList.add('light');
+    root.classList.remove('dark');
+    localStorage.setItem('lf_theme', 'light');
+  }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, isDark, toggle }}>
+    <ThemeContext.Provider value={{ theme: 'light', isDark: false, toggle: () => {} }}>
       {children}
     </ThemeContext.Provider>
   );
