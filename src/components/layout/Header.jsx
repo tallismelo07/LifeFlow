@@ -354,8 +354,8 @@ export default function Header({ onOpenCmd }) {
   return (
     <>
       <header
-        className="flex items-center justify-between px-5 lg:px-8 py-4 sticky top-0 z-10 border-b backdrop-blur-sm"
-        style={{ background: 'var(--header-bg)', borderColor: 'var(--border)' }}
+        className="flex items-center justify-between px-5 lg:px-8 sticky top-0 z-10 border-b"
+        style={{ background: 'var(--header-bg)', borderColor: 'var(--border-md)', minHeight: 60 }}
       >
         {/* Left: hamburger + page title */}
         <div className="flex items-center gap-3">
@@ -372,17 +372,16 @@ export default function Header({ onOpenCmd }) {
             <AnimatePresence mode="wait">
               <motion.h1
                 key={title}
-                initial={{ opacity: 0, y: -6 }}
+                initial={{ opacity: 0, y: -5 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 6 }}
-                transition={{ duration: 0.18 }}
-                className="font-bold text-xl lg:text-2xl leading-none"
-                style={{ color: 'var(--text)' }}
+                exit={{ opacity: 0, y: 5 }}
+                transition={{ duration: 0.15 }}
+                style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', lineHeight: 1.2, letterSpacing: '-0.01em' }}
               >
                 {title}
               </motion.h1>
             </AnimatePresence>
-            <p className="text-xs mt-0.5 hidden sm:block" style={{ color: 'var(--text-3)' }}>{sub}</p>
+            <p className="hidden sm:block" style={{ fontSize: 12, marginTop: 2, color: 'var(--text-4)' }}>{sub}</p>
           </div>
         </div>
 
@@ -390,25 +389,25 @@ export default function Header({ onOpenCmd }) {
         <div className="flex items-center gap-2">
           <SaveIndicator />
 
-          {/* User badge — clicável para abrir modal de conta */}
+          {/* User badge */}
           {currentUser && (
             <motion.button
               onClick={() => setAccountOpen(true)}
               whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
               className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl transition-colors"
-              style={{ background: 'var(--blue-bg)', border: '1px solid var(--blue-border)' }}
+              style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-md)' }}
               title="Minha conta"
             >
               <div
                 className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
-                style={{ background: 'var(--blue)', color: 'var(--on-blue)' }}
+                style={{ background: 'var(--text)', color: '#ffffff' }}
               >
                 {currentUser.avatar}
               </div>
-              <span className="text-sm font-semibold" style={{ color: 'var(--blue)' }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
                 {currentUser.name}
               </span>
-              {isAdmin && <Shield size={11} style={{ color: 'var(--amber)' }} />}
+              {isAdmin && <Shield size={11} style={{ color: 'var(--text-4)' }} />}
             </motion.button>
           )}
 
@@ -416,26 +415,26 @@ export default function Header({ onOpenCmd }) {
           <motion.button
             onClick={onOpenCmd}
             whileHover={{ scale: 1.02 }}
-            className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-mono transition-colors"
-            style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-md)', color: 'var(--text-3)' }}
+            className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl transition-colors"
+            style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-md)', color: 'var(--text-3)', fontSize: 13 }}
           >
             <Search size={13} />
             <span className="hidden lg:block">Buscar</span>
             <kbd
-              className="px-1.5 py-0.5 rounded text-[10px] hidden lg:block"
-              style={{ background: 'var(--bg-raised)', color: 'var(--text-4)' }}
+              className="px-1.5 py-0.5 rounded hidden lg:block"
+              style={{ background: 'var(--bg-raised)', color: 'var(--text-4)', fontSize: 11 }}
             >
               ⌘K
             </kbd>
           </motion.button>
 
-          {/* Minha conta — mobile (só ícone) */}
+          {/* Minha conta — mobile */}
           {currentUser && (
             <motion.button
               onClick={() => setAccountOpen(true)}
               whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.9 }}
               className="sm:hidden p-2 rounded-xl transition-colors"
-              style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)' }}
+              style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border-md)' }}
               title="Minha conta"
             >
               <KeyRound size={16} />
@@ -447,7 +446,7 @@ export default function Header({ onOpenCmd }) {
             onClick={logout}
             whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.9 }}
             className="p-2 rounded-xl transition-colors"
-            style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)' }}
+            style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border-md)' }}
             title="Sair"
           >
             <LogOut size={16} />

@@ -3,115 +3,106 @@
 @tailwind utilities;
 
 /* ══════════════════════════════════════════════════════════════
-   DESIGN TOKENS — LifeFlow v5
-   Paleta: Preto #000000 · Branco #f8f9fa · Cinzas Bootstrap
-   Detalhe opcional: Verde #3a5a40
+   DESIGN TOKENS — LifeFlow v6
+   Paleta: Branco #ffffff · Preto #111111 · Cinzas neutros
+   Estilo: Minimalista · Notion / Linear / Apple
    ══════════════════════════════════════════════════════════════ */
 
-/* ── Dark mode (padrão) ──────────────────────────────────────── */
 :root {
   /* ── Superfícies ─────────────────────────────────────────── */
-  --bg:           #000000;   /* fundo principal — preto puro    */
-  --bg-soft:      #111111;   /* cards / painéis                 */
-  --bg-muted:     #1c1c1c;   /* inputs / sutil                  */
-  --bg-raised:    #282828;   /* hover / ativo                   */
+  --bg:           #ffffff;   /* fundo principal                 */
+  --bg-soft:      #f8f9fa;   /* cards / painéis                 */
+  --bg-muted:     #f1f3f5;   /* inputs / fundos sutis           */
+  --bg-raised:    #e9ecef;   /* hover / estados ativos          */
 
   /* ── Texto ───────────────────────────────────────────────── */
-  --text:         #f8f9fa;   /* primário — branco suave         */
-  --text-2:       #dee2e6;   /* secundário                      */
-  --text-3:       #adb5bd;   /* terciário                       */
-  --text-4:       #6c757d;   /* muito sutil                     */
+  --text:         #111111;   /* primário                        */
+  --text-2:       #212529;   /* secundário                      */
+  --text-3:       #6c757d;   /* terciário                       */
+  --text-4:       #adb5bd;   /* muito sutil                     */
 
   /* ── Bordas ──────────────────────────────────────────────── */
-  --border:        rgba(255,255,255,0.06);
-  --border-md:     rgba(255,255,255,0.10);
-  --border-strong: rgba(255,255,255,0.18);
+  --border:        #f1f3f5;
+  --border-md:     #dee2e6;
+  --border-strong: #ced4da;
 
-  /* ── Cor de destaque = branco (dark) / preto (light) ──────
-     --blue mantém o nome por compatibilidade com os componentes */
-  --blue:          #f8f9fa;               /* branco = ação primária no dark */
-  --blue-d:        #dee2e6;               /* ligeiramente menos branco      */
-  --blue-bg:       rgba(255,255,255,0.07);
-  --blue-border:   rgba(255,255,255,0.14);
-  --on-blue:       #000000;               /* texto sobre botão primário      */
-
-  /* ── Accent verde (detalhe sutil) ───────────────────────── */
-  --accent:        #3a5a40;
-  --accent-light:  #4a7c59;
-
-  /* ── Status semânticos ───────────────────────────────────── */
-  --green:         #4caf7d;
-  --green-bg:      rgba(76,175,125,0.10);
-  --green-border:  rgba(76,175,125,0.22);
-  --red:           #e05c5c;
-  --red-bg:        rgba(224,92,92,0.11);
-  --red-border:    rgba(224,92,92,0.24);
-  --amber:         #e5ae35;
-  --amber-bg:      rgba(229,174,53,0.11);
-  --amber-border:  rgba(229,174,53,0.24);
-  --violet:        #9b8afb;
-  --teal:          #5bbcaa;
-
-  /* ── Layout ──────────────────────────────────────────────── */
-  --sidebar-bg:    #000000;
-  --header-bg:     rgba(0,0,0,0.96);
-
-  /* ── Scrollbar ───────────────────────────────────────────── */
-  --scrollbar:     #2c2c2c;
-  --scrollbar-h:   #3d3d3d;
-
-  /* ── Sombras ─────────────────────────────────────────────── */
-  --shadow-card:  0 1px 3px rgba(0,0,0,0.80),  0 1px 2px rgba(0,0,0,0.60);
-  --shadow-md:    0 4px 16px rgba(0,0,0,0.85),  0 2px 6px rgba(0,0,0,0.60);
-  --shadow-lg:    0 12px 32px rgba(0,0,0,0.90),  0 4px 10px rgba(0,0,0,0.65);
-}
-
-/* ── Light mode ──────────────────────────────────────────────── */
-html.light {
-  --bg:           #f8f9fa;
-  --bg-soft:      #ffffff;
-  --bg-muted:     #e9ecef;
-  --bg-raised:    #dee2e6;
-
-  --text:         #000000;
-  --text-2:       #212529;
-  --text-3:       #495057;
-  --text-4:       #adb5bd;
-
-  --border:        rgba(0,0,0,0.06);
-  --border-md:     rgba(0,0,0,0.10);
-  --border-strong: rgba(0,0,0,0.20);
-
-  --blue:          #212529;               /* quase preto = ação primária no light */
-  --blue-d:        #343a40;
-  --blue-bg:       rgba(0,0,0,0.06);
-  --blue-border:   rgba(0,0,0,0.13);
+  /* ── Cor de ação primária = preto elegante ────────────────
+     --blue mantém o nome por compatibilidade com componentes  */
+  --blue:          #111111;
+  --blue-d:        #212529;
+  --blue-bg:       #f8f9fa;
+  --blue-border:   #dee2e6;
   --on-blue:       #ffffff;
 
-  --accent:        #3a5a40;
-  --accent-light:  #4a7c59;
+  /* ── Accent (alias) ─────────────────────────────────────── */
+  --accent:        #111111;
+  --accent-light:  #343a40;
 
+  /* ── Status semânticos (mantidos para finanças) ──────────── */
   --green:         #2a9d57;
-  --green-bg:      rgba(42,157,87,0.09);
-  --green-border:  rgba(42,157,87,0.22);
+  --green-bg:      rgba(42,157,87,0.08);
+  --green-border:  rgba(42,157,87,0.16);
   --red:           #c53c3c;
-  --red-bg:        rgba(197,60,60,0.09);
-  --red-border:    rgba(197,60,60,0.22);
-  --amber:         #b07c18;
-  --amber-bg:      rgba(176,124,24,0.09);
-  --amber-border:  rgba(176,124,24,0.22);
-  --violet:        #7c3aed;
+  --red-bg:        rgba(197,60,60,0.08);
+  --red-border:    rgba(197,60,60,0.16);
+  --amber:         #9a6e10;
+  --amber-bg:      rgba(154,110,16,0.08);
+  --amber-border:  rgba(154,110,16,0.16);
+  --violet:        #6d28d9;
   --teal:          #0d9488;
 
+  /* ── Layout ──────────────────────────────────────────────── */
   --sidebar-bg:    #ffffff;
-  --header-bg:     rgba(248,249,250,0.97);
+  --header-bg:     rgba(255,255,255,0.98);
 
-  --scrollbar:     #ced4da;
-  --scrollbar-h:   #adb5bd;
+  /* ── Scrollbar ───────────────────────────────────────────── */
+  --scrollbar:     #dee2e6;
+  --scrollbar-h:   #ced4da;
 
-  --shadow-card:  0 1px 2px rgba(0,0,0,0.06),  0 1px 3px rgba(0,0,0,0.04);
-  --shadow-md:    0 4px 12px rgba(0,0,0,0.10),  0 2px 4px rgba(0,0,0,0.06);
-  --shadow-lg:    0 10px 24px rgba(0,0,0,0.13),  0 4px 8px rgba(0,0,0,0.07);
+  /* ── Sombras — extremamente sutis ───────────────────────── */
+  --shadow-card:  0 1px 3px rgba(0,0,0,0.05);
+  --shadow-md:    0 2px 10px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-lg:    0 8px 28px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.05);
+}
+
+/* ── html.light é idêntico ao :root (sem flash de tema) ──────── */
+html.light {
+  --bg:           #ffffff;
+  --bg-soft:      #f8f9fa;
+  --bg-muted:     #f1f3f5;
+  --bg-raised:    #e9ecef;
+  --text:         #111111;
+  --text-2:       #212529;
+  --text-3:       #6c757d;
+  --text-4:       #adb5bd;
+  --border:        #f1f3f5;
+  --border-md:     #dee2e6;
+  --border-strong: #ced4da;
+  --blue:          #111111;
+  --blue-d:        #212529;
+  --blue-bg:       #f8f9fa;
+  --blue-border:   #dee2e6;
+  --on-blue:       #ffffff;
+  --accent:        #111111;
+  --accent-light:  #343a40;
+  --green:         #2a9d57;
+  --green-bg:      rgba(42,157,87,0.08);
+  --green-border:  rgba(42,157,87,0.16);
+  --red:           #c53c3c;
+  --red-bg:        rgba(197,60,60,0.08);
+  --red-border:    rgba(197,60,60,0.16);
+  --amber:         #9a6e10;
+  --amber-bg:      rgba(154,110,16,0.08);
+  --amber-border:  rgba(154,110,16,0.16);
+  --violet:        #6d28d9;
+  --teal:          #0d9488;
+  --sidebar-bg:    #ffffff;
+  --header-bg:     rgba(255,255,255,0.98);
+  --scrollbar:     #dee2e6;
+  --scrollbar-h:   #ced4da;
+  --shadow-card:  0 1px 3px rgba(0,0,0,0.05);
+  --shadow-md:    0 2px 10px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-lg:    0 8px 28px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.05);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -120,13 +111,12 @@ html.light {
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
 
-  /* ── App-shell: sem scroll no body, apenas no conteúdo interno ── */
   html, body {
     height: 100%;
     overflow: hidden;
-    /* Previne scroll lateral em qualquer situação */
     max-width: 100%;
     overscroll-behavior: none;
+    font-size: 16px;
   }
 
   html { scroll-behavior: smooth; }
@@ -136,10 +126,14 @@ html.light {
     background-color: var(--bg);
     color: var(--text);
     line-height: 1.6;
+    font-size: 16px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    transition: background-color 0.25s ease, color 0.25s ease;
   }
+
+  h1 { font-size: clamp(24px, 4vw, 32px); font-weight: 700; line-height: 1.2; }
+  h2 { font-size: clamp(20px, 3vw, 24px); font-weight: 600; line-height: 1.3; }
+  h3 { font-size: 18px; font-weight: 600; line-height: 1.4; }
 
   ::-webkit-scrollbar              { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track        { background: transparent; }
@@ -155,13 +149,13 @@ html.light {
   /* ── Card ────────────────────────────────────────────────── */
   .card {
     background: var(--bg-soft);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow-card);
+    border: 1px solid var(--border-md);
+    box-shadow: none;
     @apply rounded-2xl p-5 transition-all duration-200;
   }
   .card-hover { @apply cursor-pointer; }
   .card-hover:hover {
-    border-color: var(--border-md);
+    border-color: var(--border-strong);
     box-shadow: var(--shadow-md);
     transform: translateY(-1px);
   }
@@ -172,30 +166,30 @@ html.light {
     background: var(--bg-muted);
     border: 1px solid var(--border-md);
     color: var(--text);
-    @apply rounded-xl px-4 py-3 text-sm transition-all duration-200 outline-none;
+    font-size: 15px;
+    @apply rounded-xl px-4 py-3 transition-all duration-200 outline-none;
   }
   .input-base::placeholder { color: var(--text-4); }
   .input-base:focus {
     border-color: var(--border-strong) !important;
-    box-shadow: 0 0 0 3px var(--blue-bg) !important;
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.06) !important;
+    background: #fff !important;
   }
 
   /* ── Buttons ─────────────────────────────────────────────── */
   .btn-primary {
-    background: var(--blue);
-    color: var(--on-blue);
-    @apply font-semibold text-sm px-5 py-2.5 rounded-xl
+    background: var(--text);
+    color: #ffffff;
+    font-size: 14px;
+    @apply font-semibold px-5 py-2.5 rounded-xl
            transition-all duration-150 active:scale-[0.97] cursor-pointer;
   }
   .btn-primary:hover {
-    background: var(--blue-d);
-    box-shadow: 0 4px 14px rgba(0,0,0,0.20);
-  }
-  html.light .btn-primary:hover {
-    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    background: var(--text-2);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.14);
   }
   .btn-primary:disabled {
-    opacity: 0.4;
+    opacity: 0.35;
     cursor: not-allowed;
   }
 
@@ -203,7 +197,8 @@ html.light {
     background: var(--bg-muted);
     border: 1px solid var(--border-md);
     color: var(--text-2);
-    @apply text-sm px-5 py-2.5 rounded-xl transition-all duration-150 active:scale-[0.97] cursor-pointer;
+    font-size: 14px;
+    @apply px-5 py-2.5 rounded-xl transition-all duration-150 active:scale-[0.97] cursor-pointer;
   }
   .btn-ghost:hover {
     background: var(--bg-raised);
@@ -215,7 +210,8 @@ html.light {
     background: var(--red-bg);
     color: var(--red);
     border: 1px solid var(--red-border);
-    @apply text-sm px-4 py-2 rounded-xl transition-all duration-150 active:scale-[0.97] cursor-pointer;
+    font-size: 14px;
+    @apply px-4 py-2 rounded-xl transition-all duration-150 active:scale-[0.97] cursor-pointer;
   }
   .btn-danger:hover { background: var(--red); color: #fff; }
 
@@ -224,18 +220,21 @@ html.light {
     @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
            transition-all duration-150 cursor-pointer select-none;
     color: var(--text-3);
+    font-size: 14px;
   }
   .nav-item:hover {
     color: var(--text);
-    background: var(--bg-raised);
+    background: var(--bg-muted);
   }
+  /* Ativo: fundo cinza leve + texto preto forte */
   .nav-item-active {
-    color: var(--on-blue) !important;
-    background: var(--blue) !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    color: var(--text) !important;
+    background: var(--bg-raised) !important;
+    font-weight: 600 !important;
+    box-shadow: none;
   }
   .nav-item-active:hover {
-    background: var(--blue-d) !important;
+    background: var(--bg-raised) !important;
   }
 
   /* ── Labels / Tags ───────────────────────────────────────── */
@@ -243,25 +242,32 @@ html.light {
     @apply inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg;
   }
   .label {
-    @apply text-xs font-semibold uppercase tracking-wider;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
     color: var(--text-4);
-    letter-spacing: 0.06em;
   }
 
   /* ── Progress ────────────────────────────────────────────── */
-  .progress-bar  {
-    @apply h-2.5 rounded-full overflow-hidden;
+  .progress-bar {
+    @apply h-2 rounded-full overflow-hidden;
     background: var(--bg-muted);
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-md);
   }
   .progress-fill { @apply h-full rounded-full transition-all duration-700; }
 
   /* ── Section title ───────────────────────────────────────── */
-  .section-title { @apply font-bold text-xl; color: var(--text); }
+  .section-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+  }
 
   /* ── Task Status ─────────────────────────────────────────── */
   .status-todo       { background: var(--bg-muted);  color: var(--text-3); border: 1px solid var(--border-md); }
-  .status-inprogress { background: var(--blue-bg);   color: var(--text);   border: 1px solid var(--blue-border); }
+  .status-inprogress { background: var(--bg-raised);  color: var(--text-2); border: 1px solid var(--border-strong); }
   .status-done       { background: var(--green-bg);  color: var(--green);  border: 1px solid var(--green-border); }
 
   /* ── Misc ────────────────────────────────────────────────── */
@@ -274,8 +280,8 @@ html.light {
 
   .stat-card {
     background: var(--bg-soft);
-    border: 1px solid var(--border);
-    @apply rounded-2xl p-4 flex flex-col gap-2;
+    border: 1px solid var(--border-md);
+    @apply rounded-2xl p-5 flex flex-col gap-2;
   }
 
   /* ── Safe tap targets (mobile) ───────────────────────────── */
@@ -288,13 +294,13 @@ html.light {
   select.input-base {
     cursor: pointer;
     -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236c757d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23adb5bd' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 14px center;
     padding-right: 36px;
   }
 
-  /* ── Textarea (native) ───────────────────────────────────── */
+  /* ── Textarea ────────────────────────────────────────────── */
   textarea.input-base {
     resize: vertical;
     min-height: 80px;
@@ -303,18 +309,25 @@ html.light {
 
   /* ── Page container padrão ───────────────────────────────── */
   .page-container {
-    @apply p-5 lg:p-8;
+    @apply p-6 lg:p-8;
     max-width: 900px;
   }
 
   /* ── Section header ──────────────────────────────────────── */
   .section-header {
-    @apply flex items-center justify-between gap-4 flex-wrap mb-5;
+    @apply flex items-center justify-between gap-4 flex-wrap mb-6;
   }
 
   /* ── Empty state ─────────────────────────────────────────── */
   .empty-state {
     @apply flex flex-col items-center justify-center py-16 gap-3 text-center;
+  }
+
+  /* ── Divider ─────────────────────────────────────────────── */
+  .divider {
+    height: 1px;
+    background: var(--border-md);
+    @apply my-5;
   }
 }
 
@@ -324,15 +337,15 @@ html.light {
 .custom-checkbox {
   appearance: none; -webkit-appearance: none;
   width: 18px; height: 18px;
-  border: 2px solid var(--border-strong);
+  border: 1.5px solid var(--border-strong);
   border-radius: 5px; cursor: pointer;
   transition: all 0.15s ease;
   flex-shrink: 0; position: relative;
   background: transparent;
 }
 .custom-checkbox:checked {
-  background: var(--green);
-  border-color: var(--green);
+  background: var(--text);
+  border-color: var(--text);
 }
 .custom-checkbox:checked::after {
   content: ''; position: absolute;
@@ -343,7 +356,7 @@ html.light {
 }
 .custom-checkbox:hover:not(:checked) {
   border-color: var(--text-3);
-  box-shadow: 0 0 0 3px var(--blue-bg);
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -390,8 +403,8 @@ html.light {
 .border-accent-lime\/20   { border-color: var(--green-border); }
 .border-accent-lime\/30   { border-color: var(--green-border); }
 .text-accent-blue         { color: var(--text); }
-.bg-accent-blue\/10       { background-color: var(--blue-bg); }
-.bg-accent-blue\/15       { background-color: var(--blue-bg); }
+.bg-accent-blue\/10       { background-color: var(--bg-raised); }
+.bg-accent-blue\/15       { background-color: var(--bg-raised); }
 .text-accent-rose         { color: var(--red); }
 .bg-accent-rose\/10       { background-color: var(--red-bg); }
 .bg-accent-rose\/15       { background-color: var(--red-bg); }
@@ -403,9 +416,9 @@ html.light {
 .bg-accent-amber\/10      { background-color: var(--amber-bg); }
 .bg-accent-amber\/15      { background-color: var(--amber-bg); }
 .text-accent-teal         { color: var(--teal); }
-.bg-accent-teal\/5        { background-color: rgba(91,188,170,0.06); }
-.bg-accent-teal\/10       { background-color: rgba(91,188,170,0.10); }
-.border-accent-teal\/15   { border-color: rgba(91,188,170,0.18); }
+.bg-accent-teal\/5        { background-color: rgba(13,148,136,0.05); }
+.bg-accent-teal\/10       { background-color: rgba(13,148,136,0.08); }
+.border-accent-teal\/15   { border-color: rgba(13,148,136,0.15); }
 
 /* ═══════════════════════════════════════════════════════════════
    CAT WALK ANIMATION
@@ -425,7 +438,7 @@ html.light {
 }
 .typing-cursor {
   display: inline-block;
-  width: 3px;
+  width: 2px;
   height: 1em;
   background: var(--text);
   margin-left: 3px;

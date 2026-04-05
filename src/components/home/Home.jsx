@@ -179,41 +179,31 @@ function ActivityGrid({ checkins }) {
 }
 
 // ── Mini stat card ────────────────────────────────────────────
-function StatCard({ icon: Icon, label, value, color, onClick }) {
+function StatCard({ icon: Icon, label, value, onClick }) {
   return (
     <motion.div
-      whileTap={{ scale: 0.97 }}
+      whileTap={onClick ? { scale: 0.97 } : {}}
       onClick={onClick}
       style={{
-        background:   'var(--bg-soft)',
-        border:       '1px solid var(--border)',
+        background:   '#ffffff',
+        border:       '1px solid var(--border-md)',
         borderRadius: 16,
-        padding:      '14px 16px',
+        padding:      '16px 18px',
         cursor:       onClick ? 'pointer' : 'default',
         display:      'flex',
         flexDirection:'column',
-        gap:          8,
+        gap:          10,
+        transition:   'border-color 0.15s, box-shadow 0.15s',
       }}
+      whileHover={onClick ? { borderColor: 'var(--border-strong)', boxShadow: 'var(--shadow-md)' } : {}}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div
-          style={{
-            width:        32,
-            height:       32,
-            borderRadius: 10,
-            background:   color + '22',
-            display:      'flex',
-            alignItems:   'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Icon size={16} style={{ color }} />
-        </div>
+        <Icon size={18} style={{ color: 'var(--text-4)' }} />
         {onClick && <ArrowRight size={13} style={{ color: 'var(--text-4)' }} />}
       </div>
       <div>
-        <p style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>{value}</p>
-        <p style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 3, fontWeight: 500 }}>{label}</p>
+        <p style={{ fontSize: 26, fontWeight: 700, color: 'var(--text)', lineHeight: 1, letterSpacing: '-0.02em' }}>{value}</p>
+        <p style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 4, fontWeight: 400 }}>{label}</p>
       </div>
     </motion.div>
   );
@@ -232,37 +222,37 @@ function TodayAgenda({ agenda, onNavigate }) {
   return (
     <div
       style={{
-        background:   'var(--bg-soft)',
-        border:       '1px solid var(--border)',
+        background:   '#ffffff',
+        border:       '1px solid var(--border-md)',
         borderRadius: 16,
-        padding:      '16px',
+        padding:      '18px 20px',
       }}
     >
-      <div className="flex items-center justify-between mb-3">
-        <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+      <div className="flex items-center justify-between mb-4">
+        <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
           Agenda de hoje
         </p>
         <button
           onClick={() => onNavigate('agenda')}
-          style={{ fontSize: 11, color: 'var(--blue)', fontWeight: 600 }}
+          style={{ fontSize: 13, color: 'var(--text-3)', fontWeight: 500 }}
         >
-          Ver tudo
+          Ver tudo →
         </button>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {todayEvents.map((ev) => (
-          <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div
               style={{
                 width:        6,
                 height:       6,
                 borderRadius: '50%',
-                background:   ev.color || 'var(--blue)',
+                background:   'var(--text-3)',
                 flexShrink:   0,
               }}
             />
-            <p style={{ fontSize: 13, color: 'var(--text)', flex: 1, fontWeight: 500 }}>{ev.title}</p>
-            <span style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: 'monospace' }}>
+            <p style={{ fontSize: 14, color: 'var(--text)', flex: 1, fontWeight: 500 }}>{ev.title}</p>
+            <span style={{ fontSize: 12, color: 'var(--text-4)', fontFamily: 'monospace' }}>
               {new Date(ev.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
@@ -307,37 +297,30 @@ export default function Home() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22 }}
     >
-      <div style={{ padding: '24px 20px 32px', maxWidth: 680, margin: '0 auto' }}>
+      <div style={{ padding: '32px 24px 40px', maxWidth: 680, margin: '0 auto' }}>
 
         {/* ── Cabeçalho / Saudação ─────────────────────────── */}
-        <div
-          style={{
-            background:   'linear-gradient(135deg, var(--blue-bg) 0%, var(--bg-soft) 100%)',
-            border:       '1px solid var(--blue-border)',
-            borderRadius: 20,
-            padding:      '24px 24px 20px',
-            marginBottom: 20,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <GreetIcon size={16} style={{ color: 'var(--amber)' }} />
-            <p style={{ fontSize: 13, color: 'var(--text-3)', fontWeight: 500 }}>{greetText}</p>
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+            <GreetIcon size={15} style={{ color: 'var(--text-4)' }} />
+            <p style={{ fontSize: 14, color: 'var(--text-3)', fontWeight: 500 }}>{greetText}</p>
           </div>
 
           <h1
             style={{
-              fontSize:   28,
-              fontWeight: 800,
-              color:      'var(--text)',
-              lineHeight: 1.1,
-              marginBottom: 10,
+              fontSize:     'clamp(26px, 5vw, 32px)',
+              fontWeight:   700,
+              color:        'var(--text)',
+              lineHeight:   1.15,
+              letterSpacing: '-0.01em',
+              marginBottom: 8,
             }}
           >
-            Olá, {firstName} 👋
+            Olá, {firstName}
           </h1>
 
-          <p style={{ fontSize: 14, color: 'var(--text-3)', fontStyle: 'italic', lineHeight: 1.5 }}>
-            "{phrase}"
+          <p style={{ fontSize: 15, color: 'var(--text-3)', lineHeight: 1.6 }}>
+            {phrase}
           </p>
 
           {/* Check-in CTA */}
@@ -346,36 +329,33 @@ export default function Home() {
               onClick={() => setActiveTab('checkin')}
               whileTap={{ scale: 0.97 }}
               style={{
-                marginTop:    16,
-                display:      'flex',
+                marginTop:    18,
+                display:      'inline-flex',
                 alignItems:   'center',
                 gap:          8,
-                background:   'var(--blue)',
-                color:        'var(--on-blue)',
+                background:   'var(--text)',
+                color:        '#ffffff',
                 border:       'none',
                 borderRadius: 12,
-                padding:      '10px 16px',
-                fontSize:     13,
-                fontWeight:   700,
+                padding:      '10px 18px',
+                fontSize:     14,
+                fontWeight:   600,
                 cursor:       'pointer',
               }}
             >
               <CalendarCheck size={15} />
               Fazer check-in de hoje
-              <ArrowRight size={13} />
+              <ArrowRight size={14} />
             </motion.button>
           )}
 
           {checkinToday && (
-            <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div
-                style={{
-                  width: 8, height: 8, borderRadius: '50%',
-                  background: 'var(--green)', flexShrink: 0,
-                }}
-              />
-              <p style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>
-                Check-in do dia concluído ✓
+            <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: 'var(--green-bg)', border: '1px solid var(--green-border)',
+              borderRadius: 10, padding: '6px 12px' }}>
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--green)', flexShrink: 0 }} />
+              <p style={{ fontSize: 13, color: 'var(--green)', fontWeight: 600 }}>
+                Check-in de hoje concluído
               </p>
             </div>
           )}
@@ -386,51 +366,47 @@ export default function Home() {
           style={{
             display:             'grid',
             gridTemplateColumns: 'repeat(2, 1fr)',
-            gap:                 12,
-            marginBottom:        20,
+            gap:                 14,
+            marginBottom:        28,
           }}
         >
           <StatCard
             icon={Zap}
             label="Sequência de check-ins"
             value={streak === 0 ? '–' : `${streak}d`}
-            color="var(--amber)"
             onClick={() => setActiveTab('checkin')}
           />
           <StatCard
             icon={CheckSquare}
             label="Tarefas concluídas"
             value={doneTasks}
-            color="var(--blue)"
             onClick={() => setActiveTab('tasks')}
           />
           <StatCard
             icon={Flame}
             label={`Hábitos hoje (${totalHabits})`}
             value={`${habitsToday}/${totalHabits}`}
-            color="var(--red)"
             onClick={() => setActiveTab('habits')}
           />
           <StatCard
             icon={TrendingUp}
             label="Check-ins totais"
             value={checkins.length}
-            color="var(--green)"
           />
         </div>
 
         {/* ── Agenda de hoje ────────────────────────────────── */}
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 24 }}>
           <TodayAgenda agenda={agenda} onNavigate={setActiveTab} />
         </div>
 
         {/* ── Activity grid ─────────────────────────────────── */}
         <div
           style={{
-            background:   'var(--bg-soft)',
-            border:       '1px solid var(--border)',
+            background:   '#ffffff',
+            border:       '1px solid var(--border-md)',
             borderRadius: 16,
-            padding:      '16px 16px 20px',
+            padding:      '20px 20px 24px',
           }}
         >
           {loadingCI ? (

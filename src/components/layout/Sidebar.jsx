@@ -91,16 +91,16 @@ export default function Sidebar() {
 
       {/* Logo */}
       <div className="flex items-center justify-between px-2 mb-6">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <motion.div
             className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: 'var(--blue)', boxShadow: '0 2px 10px rgba(58,90,64,0.35)' }}
+            style={{ background: 'var(--text)', boxShadow: 'none' }}
             whileHover={{ rotate: 15, scale: 1.1 }}
             transition={{ type: 'spring', stiffness: 300 }}
           >
-            <Leaf size={15} style={{ color: 'var(--on-blue)' }} strokeWidth={2} />
+            <Leaf size={14} style={{ color: '#ffffff' }} strokeWidth={2} />
           </motion.div>
-          <span className="font-bold text-lg tracking-tight" style={{ color: 'var(--text)' }}>LifeFlow</span>
+          <span style={{ fontWeight: 700, fontSize: 17, letterSpacing: '-0.01em', color: 'var(--text)' }}>LifeFlow</span>
         </div>
         <motion.button
           onClick={() => setSidebarOpen(false)}
@@ -116,23 +116,23 @@ export default function Sidebar() {
       {currentUser && (
         <motion.div
           className="mx-1 mb-5 px-3 py-3 rounded-xl"
-          style={{ background: 'var(--blue-bg)', border: '1px solid var(--blue-border)' }}
+          style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-md)' }}
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-3">
             <div
               className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-              style={{ background: 'var(--blue)', color: 'var(--on-blue)' }}
+              style={{ background: 'var(--text)', color: '#ffffff' }}
             >
               {currentUser.avatar}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold leading-none truncate" style={{ color: 'var(--text)' }}>
+              <p style={{ fontSize: 14, fontWeight: 600, lineHeight: 1, color: 'var(--text)' }} className="truncate">
                 {currentUser.name}
               </p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>
+              <p style={{ fontSize: 12, marginTop: 3, color: 'var(--text-4)' }}>
                 {isTallis ? 'Admin · Modo foco' : isAdmin ? 'Administrador' : 'Usuário'}
               </p>
             </div>
@@ -162,8 +162,8 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="px-2 mt-4 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
-        <p className="text-[11px] font-mono" style={{ color: 'var(--text-4)' }}>
+      <div className="px-2 mt-4 pt-3" style={{ borderTop: '1px solid var(--border-md)' }}>
+        <p style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-4)' }}>
           Ctrl+K · comandos rápidos
         </p>
       </div>
